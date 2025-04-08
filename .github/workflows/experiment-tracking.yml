@@ -1,0 +1,46 @@
+name: OCT Denoising Experiment Tracking
+
+on:
+  workflow_dispatch:
+    inputs:
+      experiment_name:
+        description: 'Name of the experiment'
+        required: true
+      model_type:
+        description: 'Model architecture used'
+        required: true
+      dataset:
+        description: 'Dataset used for evaluation'
+        required: true
+        default: 'DUKE'
+
+jobs:
+  track_experiment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Generate experiment report
+        run: |
+          mkdir -p artifacts
+          python scripts/generate_report.py \
+            --experiment-name "${{ github.event.inputs.experiment_name }}" \
+            --model-type "${{ github.event.inputs.model_type }}" \
+            --dataset "${{ github.event.inputs.dataset }}" \
+            --output-dir artifacts
+            
+      - name: Upload experiment artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ github.event.inputs.experiment_name }}-results
+          path: artifacts/
