@@ -151,20 +151,20 @@ def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, lo
     diagonal1_kernel = torch.tensor([[[[1, 0], [0, -1]]]], dtype=batch_targets.dtype, device=batch_targets.device)
     diagonal2_kernel = torch.tensor([[[[0, 1], [-1, 0]]]], dtype=batch_targets.dtype, device=batch_targets.device)
     
-    h_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, horizontal_kernel, padding='same'))
-    h_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, horizontal_kernel, padding='same'))
+    h_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, horizontal_kernel, padding=(0, 1)))
+    h_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, horizontal_kernel, padding=(0, 1)))
     h_edge_loss = mse(h_edges_flow, h_edges_target).mean()
     
-    v_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, vertical_kernel, padding='same'))
-    v_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, vertical_kernel, padding='same'))
+    v_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, vertical_kernel, padding=(1, 0)))
+    v_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, vertical_kernel, padding=(1, 0)))
     v_edge_loss = mse(v_edges_flow, v_edges_target).mean()
     
-    d1_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, diagonal1_kernel, padding='same'))
-    d1_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, diagonal1_kernel, padding='same'))
+    d1_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, diagonal1_kernel, padding=(1, 1)))
+    d1_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, diagonal1_kernel, padding=(1, 1)))
     d1_edge_loss = mse(d1_edges_flow, d1_edges_target).mean()
     
-    d2_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, diagonal2_kernel, padding='same'))
-    d2_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, diagonal2_kernel, padding='same'))
+    d2_edges_target = torch.abs(torch.nn.functional.conv2d(batch_targets, diagonal2_kernel, padding=(1, 1)))
+    d2_edges_flow = torch.abs(torch.nn.functional.conv2d(flow_component, diagonal2_kernel, padding=(1, 1)))
     d2_edge_loss = mse(d2_edges_flow, d2_edges_target).mean()
     
     edge_loss = (1.5*h_edge_loss + 1.5*v_edge_loss + 0.8*d1_edge_loss + 0.8*d2_edge_loss) / 4.0

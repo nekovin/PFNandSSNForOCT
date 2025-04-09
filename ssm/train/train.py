@@ -1,6 +1,22 @@
 
 from IPython.display import clear_output
 import random
+import numpy as np
+import torch
+
+import os 
+import sys
+sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm")
+
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+from models.ssm import SpeckleSeparationModule, SpeckleSeparationUNet
+from losses.ssm_loss import custom_loss
+from utils.visualise import visualize_progress
+import torch
 
 def train_speckle_separation_module_n2n(dataset, 
                                    num_epochs=50, 
@@ -76,7 +92,7 @@ def train_speckle_separation_module_n2n(dataset,
     if load_model:
         try:
             print("Loading model from checkpoint...")
-            checkpoint_path = r"checkpoints/speckle_separation_model_best.pth"
+            checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\speckle_separation_model_best.pth"
             checkpoint = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
             model.to(device)
@@ -189,7 +205,7 @@ def train_speckle_separation_module_n2n(dataset,
                 'optimizer_state_dict': optimizer.state_dict(),  # optional, but useful
                 'history': history,
             }
-            checkpoint_path = "checkpoints/speckle_separation_model_best.pth"
+            checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\speckle_separation_model_best.pth"
             torch.save(checkpoint, checkpoint_path)
             print(f"Model checkpoint saved at {checkpoint_path}")
 
@@ -201,7 +217,7 @@ def train_speckle_separation_module_n2n(dataset,
                 'optimizer_state_dict': optimizer.state_dict(),  # optional, but useful
                 'history': history,
             }
-        checkpoint_path = r"checkpoints/speckle_separation_model_last.pth"
+        checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\speckle_separation_model_last.pth"
         torch.save(checkpoint, checkpoint_path)
         print(f"Model checkpoint saved at {checkpoint_path}")
     
