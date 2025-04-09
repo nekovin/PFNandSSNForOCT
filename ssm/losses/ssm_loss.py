@@ -133,11 +133,62 @@ def structural_correlation_loss(noise_component, target):
     # Minimize the absolute correlation
     return torch.mean(torch.abs(correlation))
 
-def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, loss_parameters):
+def flow_structure_preservation_loss(flow_component, original_image, target=None, threshold=0.15):
+    """
+    Preserves flow-related speckle patterns while allowing removal of noise-only speckle.
+    
+    Args:
+        flow_component: Model's predicted flow component
+        original_image: Original OCT input image
+        target: Optional target OCTA image (if available)
+        threshold: Intensity threshold for identifying potential flow regions
+    """
+    # 1. Identify potential flow regions using temporal variance or intensity patterns
+    if target is not None:
+        # If we have target OCTA, use it to identify flow regions
+        flow_regions = (target > threshold).float()
+    else:
+        # Otherwise use heuristics to estimate flow regions
+        # Technique: Look for structured speckle with temporal correlation
+        variance = torch.var(original_image, dim=0, keepdim=True)
+        flow_regions = (variance > variance.mean() * 1.5).float()
+    
+    # 2. Calculate flow pattern coherence loss
+    # We want to preserve spatial coherence in flow regions
+    sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(flow_component.device)
+    sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], dtype=torch.float32).view(1, 1, 3, 3).to(flow_component.device)
+    
+    # Calculate gradients of original and flow component
+    orig_grad_x = F.conv2d(original_image, sobel_x, padding=1)
+    orig_grad_y = F.conv2d(original_image, sobel_y, padding=1)
+    flow_grad_x = F.conv2d(flow_component, sobel_x, padding=1)
+    flow_grad_y = F.conv2d(flow_component, sobel_y, padding=1)
+    
+    # Calculate gradient magnitude
+    orig_grad_mag = torch.sqrt(orig_grad_x**2 + orig_grad_y**2 + 1e-6)
+    flow_grad_mag = torch.sqrt(flow_grad_x**2 + flow_grad_y**2 + 1e-6)
+    
+    # In flow regions, preserve gradient structure
+    flow_structure_loss = F.l1_loss(
+        flow_grad_mag * flow_regions, 
+        orig_grad_mag * flow_regions,
+        reduction='sum'
+    ) / (flow_regions.sum() + 1e-6)
+    
+    # 3. Add spectral constraint for flow patterns
+    # Optional: Add FFT-based constraint to preserve spectral characteristics of flow
+    
+    return flow_structure_loss
+
+import matplotlib.pyplot as plt
+
+def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, loss_parameters, debug):
     mse = nn.MSELoss(reduction='none')
 
-    foreground_mask = (batch_targets > 0.1).float()
+    foreground_mask = (batch_targets > 0.03).float()
     background_mask = 1.0 - foreground_mask
+
+    plt.imshow(foreground_mask.cpu().numpy()[0][0], cmap='gray')
     
     # not very elegant just mse loss between masked flow and target
     pixel_wise_loss = mse(flow_component, batch_targets)
@@ -173,6 +224,8 @@ def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, lo
     local_avg = torch.nn.functional.conv2d(flow_component, continuity_kernel, padding=1)
     discontinuity_penalty = torch.mean(((flow_component - local_avg) * foreground_mask)**2) * 2.0
 
+    #flow_preservation_loss = flow_structure_preservation_loss(flow_component, batch_inputs, batch_targets)
+
     if not loss_parameters:
         alpha, beta, gamma, delta = 1.0, 1.0, 1.0, 1.0
     else:
@@ -186,6 +239,10 @@ def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, lo
         beta * background_loss +      # Strong background suppression
         gamma * edge_loss +           # Edge preservation     # NEW: Explicitly penalize unwanted circular patterns
         delta * discontinuity_penalty # NEW: Penalize discontinuities in vessels
+        #+ 1.0 * flow_preservation_loss
     )
+
+    if debug:
+        print(f"Foreground Loss: {foreground_loss.item()}, Background Loss: {background_loss.item()}, Edge Loss: {edge_loss.item()}, Discontinuity Penalty: {discontinuity_penalty.item()}, Flow Preservation Loss: {flow_preservation_loss.item()}")
     
     return total_loss
