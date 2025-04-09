@@ -318,7 +318,9 @@ class SpeckleSeparationUNetAttention(nn.Module):
         # Final attention after dilation
         self.final_attention = nn.Sequential(
             ChannelAttention(feature_dim),
-            SpatialAttention()
+            nn.Dropout(0.2),  # Add dropout here
+            SpatialAttention(),
+            nn.Dropout(0.2)   # And here
         )
         
         # Output layers with residual connections
