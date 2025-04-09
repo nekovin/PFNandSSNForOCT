@@ -129,11 +129,12 @@ def compute_decorrelation(oct1, oct2):
     numerator = (oct1 - oct2)**2
     denominator = oct1**2 + oct2**2
     
-    epsilon = 1e-10  # Small constant to avoid division by zero
+    epsilon = 1e-6  # Small constant to avoid division by zero
     decorrelation = numerator / (denominator + epsilon)
     
     return decorrelation
 
+from skimage.filters import threshold_local
 def threshold_octa(octa, oct, threshold):
 
     # Create mask based on OCT intensity
@@ -150,7 +151,9 @@ def threshold_octa(octa, oct, threshold):
         intensity_threshold = np.percentile(oct, threshold)
     
     # Create mask for significant signal
-    signal_mask = oct > intensity_threshold
+    #signal_mask = oct > intensity_threshold
+
+    signal_mask = np.clip((oct - intensity_threshold) / (background_std * 2), 0, 1)
 
     #plt.imshow(octa, cmap='gray')
     #plt.show()

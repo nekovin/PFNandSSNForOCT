@@ -25,7 +25,8 @@ def train_speckle_separation_module_n2n(dataset,
                                    device='cuda' if torch.cuda.is_available() else 'cpu',
                                    unet=False,
                                    loss_parameters=None,
-                                   load_model=False):
+                                   load_model=False,
+                                   debug=False):
     """
     Train the SpeckleSeparationModule using the provided input-target data
     
@@ -152,9 +153,20 @@ def train_speckle_separation_module_n2n(dataset,
 
             total_loss = total_loss + n2v_loss * n2v_weight
 
+            print(f"Total Loss: {total_loss.item()}")
+
             # Backward pass and optimize
             total_loss.backward()
+
+            if debug and epoch == 0:
+                params_before = [p.clone().detach() for p in model.parameters()]
+
             optimizer.step()
+
+            if debug and epoch == 0:
+                params_after = [p.clone().detach() for p in model.parameters()]
+                any_change = any(torch.any(b != a) for b, a in zip(params_before, params_after))
+                print(f"Parameters changed: {any_change}")
 
             noise_loss = 0
             
@@ -183,7 +195,8 @@ def train_speckle_separation_module_n2n(dataset,
         # Print epoch results
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {avg_loss:.6f}, Flow Loss: {avg_flow_loss:.6f}, Noise Loss: {avg_noise_loss:.6f}")
         
-        clear_output(wait=True)
+        if not debug:
+            clear_output(wait=True)
         #visualize_progress(model, inputs[0:1], targets[0:1], epoch+1)
         random.seed(epoch)
         #random_n = random.randint(0, len(inputs)-1)
@@ -193,6 +206,9 @@ def train_speckle_separation_module_n2n(dataset,
                         masked_tensor=masked_inputs[random_idx:random_idx+1][0][0].cpu().numpy(), epoch=epoch+1)
 
         plt.close()
+
+        if debug:
+            return model, history
 
         if avg_loss < best_loss:
             best_loss = avg_loss
