@@ -173,6 +173,23 @@ def pair_data(preprocessed_data, octa_data, n_images_per_patient):
 
     return input_target
 
+def pair_data(preprocessed_data, octa_data, n_images_per_patient):
+    # Calculate the offset due to n_neighbours
+    n_neighbours = (len(preprocessed_data) - len(octa_data)) // 2
+    
+    input_target = []
+    for i in range(len(octa_data)):
+        # Match each octa image with its corresponding OCT image
+        # The octa at index i corresponds to the preprocessed at index i+n_neighbours
+        oct_image = preprocessed_data[i + n_neighbours]
+        octa_image = octa_data[i]
+        input_target.append([oct_image, octa_image])
+        
+        if len(input_target) >= n_images_per_patient:
+            break
+            
+    return input_target
+
 def remove_speckle_noise(image, min_size=5):
     """
     Remove small isolated speckles from an OCTA image
@@ -240,6 +257,36 @@ def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold
 
             dataset[i] = input_target_data[5:-5]
 
+        return dataset
+    
+    except Exception as e:
+        print(f"Error in preprocessing: {e}")
+
+def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
+    
+    if sample:
+        begin = n_patients-1
+    else:
+        begin = 1
+    dataset = {}
+    try:
+        for i in range(begin, n_patients):
+            data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
+            preprocessed_data = standard_preprocessing(data)
+            octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)
+            
+            # Clean the OCTA data
+            cleaned_octa_data = []
+            for octa_img in octa_data:
+                cleaned_img = remove_speckle_noise(octa_img, min_size=post_process_size)
+                cleaned_octa_data.append(cleaned_img)
+            
+            # Pair the data correctly, accounting for the offset
+            input_target_data = pair_data(preprocessed_data, cleaned_octa_data, n_images_per_patient)
+            
+            # Store without arbitrary slicing, or use a slicing that's related to n_neighbours
+            dataset[i] = input_target_data
+            
         return dataset
     
     except Exception as e:
