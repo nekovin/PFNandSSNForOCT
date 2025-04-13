@@ -1,0 +1,40 @@
+ssm/notebooks
+ssm/checkpoints
+ssm/visualisations
+
+ssn2v/notebooks
+ssn2v/checkpoints
+ssn2v/_notebooks
+
+.ipynb_checkpoints
+
+# Python cache files
+__pycache__/
+*/__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+.env/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Editor specific files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+data/
+
+stage2/old
+
+ssn2v/outputs
+ssn2v/stage2/checkpoints
