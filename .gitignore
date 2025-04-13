@@ -4,6 +4,7 @@ ssm/visualisations
 
 ssn2v/notebooks
 ssn2v/checkpoints
+ssn2v/_notebooks
 
 .ipynb_checkpoints
 

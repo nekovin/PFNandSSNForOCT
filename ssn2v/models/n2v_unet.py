@@ -6,23 +6,28 @@ class DoubleConv(nn.Module):
         super().__init__()
         if not mid_channels:
             mid_channels = out_channels
-            
-        # For kernel_size=5 and dilation=2, we need padding=4 to maintain dimensions
-        # The formula is: padding = (kernel_size - 1) * dilation / 2
-        self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, mid_channels, kernel_size=5, padding=4, dilation=2),
+        self._double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=3, padding=1),
             nn.BatchNorm2d(mid_channels),
             nn.LeakyReLU(inplace=True),
-            nn.Dropout(0.2),
-            # For the second conv, we need padding=2 with kernel_size=5 and dilation=1
-            nn.Conv2d(mid_channels, out_channels, kernel_size=5, padding=2),
+            nn.Conv2d(mid_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(inplace=True)
+        )
+
+        self.double_conv = nn.Sequential(
+            nn.Conv2d(in_channels, mid_channels, kernel_size=5, padding=2),  # Changed from 3 to 5 # add dilation?
+            nn.BatchNorm2d(mid_channels),
+            nn.LeakyReLU(inplace=True),
+            nn.Dropout(0.2),  # Add dropout
+            nn.Conv2d(mid_channels, out_channels, kernel_size=5, padding=2),  # Changed from 3 to 5
             nn.BatchNorm2d(out_channels),
             nn.LeakyReLU(inplace=True),
-            nn.Dropout(0.2)
+            nn.Dropout(0.2)  # Add dropout
         )
         
         nn.init.kaiming_normal_(self.double_conv[0].weight)
-        nn.init.kaiming_normal_(self.double_conv[4].weight)
+        nn.init.kaiming_normal_(self.double_conv[4].weight) # changed from 3 to 4
 
     def forward(self, x):
         return self.double_conv(x)
@@ -55,10 +60,11 @@ class NoiseToVoidUNet(nn.Module):
         # Final convolution
         self.final_conv = nn.Sequential(
             nn.Conv2d(features[0], out_channels, kernel_size=1),
-            nn.ReLU()
+            #nn.Sigmoid() 
+            nn.ReLU() # Sigmoid for binary segmentation
         )
 
-        # Feature extraction layers - keep these for internal use
+        # Feature extraction layers
         self.feature_layers = nn.ModuleList([
             nn.Sequential(
                 nn.Conv2d(f, f//2, kernel_size=1),
@@ -67,22 +73,21 @@ class NoiseToVoidUNet(nn.Module):
             ) for f in features
         ])
 
-    def forward(self, x):
-        # Store original dimensions
-        original_shape = x.shape
         
+    def forward(self, x):
         skip_connections = []
-        # We'll still calculate extracted_features but won't return them
-        extracted_features = []
+        #extracted_features = []
 
         # Downsampling and feature extraction
         for down, feature_layer in zip(self.downs, self.feature_layers):
             x = down(x)
             skip_connections.append(x)
-            extracted_features.append(feature_layer(x))
+            #extracted_features.append(feature_layer(x))
             x = self.pool(x)
 
         x = self.bottleneck(x)
+
+        # Reverse skip connections for upsampling
         skip_connections = skip_connections[::-1]
 
         # Upsampling
@@ -91,26 +96,14 @@ class NoiseToVoidUNet(nn.Module):
             skip_connection = skip_connections[idx//2]
 
             if x.shape != skip_connection.shape:
-                x = torch.nn.functional.interpolate(
-                    x, size=skip_connection.shape[2:], 
-                    mode="bilinear", align_corners=False
-                )
+                #x = torch.nn.functional.resize(x, size=skip_connection.shape[2:])
+                x = torch.nn.functional.interpolate(x, size=skip_connection.shape[2:], mode="bilinear", align_corners=False)
+
 
             concat_skip = torch.cat((skip_connection, x), dim=1)
             x = self.ups[idx+1](concat_skip)
 
-        # Get the output
-        output = self.final_conv(x)
-        
-        # Ensure output matches the original input dimensions
-        if output.shape[2:] != original_shape[2:]:
-            output = torch.nn.functional.interpolate(
-                output, size=original_shape[2:], 
-                mode="bilinear", align_corners=False
-            )
-            
-        # Return only the output image
-        return output
+        return self.final_conv(x) #, extracted_features
     
     def __str__(self):
         return "N2NUNet"

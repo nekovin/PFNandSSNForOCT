@@ -98,3 +98,27 @@ class N2VUNet(nn.Module):
         
         # Final output
         return self.outc(x)
+
+class Noise2VoidLoss(nn.Module):
+    def __init__(self):
+        super(Noise2VoidLoss, self).__init__()
+        self.mse = nn.MSELoss()
+    
+    def forward(self, pred, target):
+        return self.mse(pred, target)
+
+def get_N2VUNet(in_channels=1, out_channels=1, device='cpu'):
+    model = N2VUNet(n_channels=in_channels, 
+                   out_channels=out_channels,
+                   features=[64, 128, 256])
+    return model.to(device)
+
+def get_n2v_unet_model():
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    model = get_N2VUNet(in_channels=1, out_channels=1, device=device)
+    
+    criterion = Noise2VoidLoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+    return device, model, criterion, optimizer

@@ -8,8 +8,13 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
+import os 
+import sys
+sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssn2v")
+
 from losses.n2v_loss import Noise2VoidLoss
-from models.model import NoiseToVoidUNet
+#from models.model import NoiseToVoidUNet
+from models.blind_n2v_unet import N2VUNet
 
 import matplotlib.pyplot as plt
 
@@ -30,8 +35,9 @@ def normalize_image(np_img):
     np_img[np_img < 0.01] = 0
     return np_img
 
-def normalize_data(data, target_min=0, target_max=1):
+def normalize_data_np(data, target_min=0, target_max=1):
     """Normalize data to target range"""
+    
     current_min = data.min()
     current_max = data.max()
     
@@ -42,6 +48,21 @@ def normalize_data(data, target_min=0, target_max=1):
     normalized = normalized * (target_max - target_min) + target_min
     return normalized
 
+def normalize_data(data, target_min=0, target_max=1):
+    """Normalize data to target range"""
+    
+    # Detach from computation graph and convert to float
+    data = data.detach().float()
+    
+    current_min = data.min()
+    current_max = data.max()
+    
+    if current_min == current_max:
+        return torch.ones_like(data) * target_min
+    
+    normalized = (data - current_min) / (current_max - current_min)
+    normalized = normalized * (target_max - target_min) + target_min
+    return normalized
 
 def group_pairs(noisy_sets):
     noisy_pairs = []
@@ -71,10 +92,8 @@ def get_unet_model():
 
     return device, model, criterion, optimizer
 
-def get_stage1_loaders(full_noisy_pairs, img_size):
+def get_stage1_loaders(flow_imgs, img_size):
 
-    noisy_pairs = group_pairs(full_noisy_pairs)
-        
     transform = transforms.Compose([
         transforms.Lambda(lambda img: torch.tensor(img, dtype=torch.float32)), 
         transforms.Resize((img_size, img_size)),
@@ -85,16 +104,16 @@ def get_stage1_loaders(full_noisy_pairs, img_size):
     val_ratio = 0.15
     test_ratio = 0.15
 
-    dataset_size = len(noisy_pairs)
+    dataset_size = len(flow_imgs)
     train_size = int(dataset_size * train_ratio)
     val_size = int(dataset_size * val_ratio)
     test_size = dataset_size - train_size - val_size
 
-    random.shuffle(noisy_pairs)
+    random.shuffle(flow_imgs)
 
-    train_data = noisy_pairs[:train_size]
-    val_data = noisy_pairs[train_size:train_size + val_size]
-    test_data = noisy_pairs[train_size + val_size:]
+    train_data = flow_imgs[:train_size]
+    val_data = flow_imgs[train_size:train_size + val_size]
+    test_data = flow_imgs[train_size + val_size:]
 
     train_dataset = Stage1(data=train_data, transform=transform)
     val_dataset = Stage1(data=val_data, transform=transform)
@@ -106,13 +125,13 @@ def get_stage1_loaders(full_noisy_pairs, img_size):
 
     print(f"Train size: {len(train_loader)}, Validation size: {len(val_loader)}, Test size: {len(test_loader)}")
 
-    assert next(iter(train_loader))[0].shape == (1, 1, img_size, img_size), "First noisy image shape mismatch!"
-    assert next(iter(train_loader))[1].shape == (1, 1, img_size, img_size), "Second noisy image shape mismatch!"
+    #assert next(iter(train_loader))[0].shape == (1, 1, img_size, img_size), "First noisy image shape mismatch!"
+    #assert next(iter(train_loader))[1].shape == (1, 1, img_size, img_size), "Second noisy image shape mismatch!"
 
     return train_loader, val_loader, test_loader
 
 def get_n2n_unet_model(in_channels=1, out_channels=1, device='cpu'):
-    model = NoiseToVoidUNet(in_channels=in_channels, 
+    model = N2VUNet(in_channels=in_channels, 
                            out_channels=out_channels,
                            features=[64, 128, 256, 512])
     return model.to(device)
@@ -225,20 +244,14 @@ class Stage1(Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        noisy_group = self.data[idx]
+        img = self.data[idx]
 
-        img1, img2 = random.sample(noisy_group, 2)
-
-        if len(img1.shape) == 2:
-            img1 = np.expand_dims(img1, axis=0)  # Add channel dim if grayscale
-        if len(img2.shape) == 2:
-            img2 = np.expand_dims(img2, axis=0)
+        if len(img.shape) == 2:
+            img = np.expand_dims(img, axis=0)  # Add channel dim if grayscale
 
         if self.transform:
-            img1 = self.transform(img1)
-            img2 = self.transform(img2)
+            img = self.transform(img)
 
-        img1 = normalize_data(img1)
-        img2 = normalize_data(img2)
+        img = normalize_data(img)
 
-        return img1, img2  # Return a tuple of two nois
+        return img

@@ -15,8 +15,6 @@ import torch.nn as nn
 from stage1.utils.utils import normalize_image, get_stage1_loaders, get_unet_model, normalize_data
 from models.enhanced_n2v_unet import get_e_unet_model
 
-from ssm.ssm import SpeckleSeparationModule, SpeckleSeparationUNet
-
 
 def ssim_loss(img1, img2, window_size=11, size_average=True):
     C1, C2 = 0.01**2, 0.03**2  # Small stability constants
@@ -1010,7 +1008,7 @@ def validate(model, device, data_loader, ssm):
 # import random split
 from torch.utils.data import random_split
 
-def process_stage2(results, model, history, train_loader, val_loader, test_loader, epochs=1, stage1_path='checkpoints/stage1.pth', visualise=False, load=False):
+def _process_stage2(results, model, history, train_loader, val_loader, test_loader, epochs=1, stage1_path='checkpoints/stage1.pth', visualise=False, load=False):
     # Prepare stage 2 data
     stage2_data = []
     n = min(10, len(results['raw_image']) - 1)  # Ensure we don't go out of bounds
@@ -1100,6 +1098,39 @@ def process_stage2(results, model, history, train_loader, val_loader, test_loade
 
 ###
 
+def process_stage2(model, device, optimizer, scheduler, train_loader, val_loader, epochs=5, stage1_path='checkpoints/stage2.pth', visualise=False, load=False):
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=3)
+
+    # Partial model freezing (optional)
+    for name, param in model.named_parameters():
+        if 'down' in name:  # Only train the decoder part
+            param.requires_grad = False
+
+    # Stage 2 training
+    model = train_stage2(
+        model, 
+        device, 
+        optimizer, 
+        train_loader, 
+        val_loader, 
+        num_epochs=epochs, 
+        scheduler=scheduler, 
+        visualise=visualise
+    )
+
+    # Save model
+    save_path = "checkpoints/stage2_256_final_N2NUNet_model.pth"
+    torch.save({
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict()
+    }, save_path)
+
+    # Apply model to sample images
+    denoised_oct1, denoised_oct2 = apply_model(model, oct1, oct2, device)
+    
+    return denoised_oct1, denoised_oct2
+
 
 class Noise2VoidLoss(nn.Module):
     def __init__(self, mask_ratio=0.1):
@@ -1128,8 +1159,8 @@ class Noise2VoidLoss(nn.Module):
 
 def train_stage2(model, device, optimizer, train_loader, val_loader, num_epochs=5, scheduler=None, visualise=False):
 
-    ssm_path = "checkpoints/speckle_separation_model.pth"
-    ssm = SpeckleSeparationModule(input_channels=1, feature_dim=32)
+    #ssm_path = "checkpoints/speckle_separation_model.pth"
+    #ssm = SpeckleSeparationModule(input_channels=1, feature_dim=32)
     #ssm = SpeckleSeparationUNet(input_channels=1, feature_dim=32)
     ssm.load_state_dict(torch.load(ssm_path, map_location=device))
     ssm.to(device)

@@ -77,10 +77,20 @@ class EnhancedNoiseToVoidUNet(nn.Module):
         # Upsampling with advanced interpolation
         for feature in reversed(features):
             self.ups.append(
+                nn.Sequential(
+                    nn.Upsample(scale_factor=2, mode="bilinear", align_corners=False),
+                    nn.Conv2d(feature * 2, feature, kernel_size=3, padding=1)
+                )
+            )
+            '''
+            self.ups.append(
                 nn.ConvTranspose2d(
                     feature * 2, feature, kernel_size=2, stride=2
                 )
             )
+            '''
+
+
             self.ups.append(ResDoubleConv(feature * 2, feature))
 
         # Final convolution with adaptive output
@@ -107,15 +117,6 @@ class EnhancedNoiseToVoidUNet(nn.Module):
         for idx in range(0, len(self.ups), 2):
             x = self.ups[idx](x)
             skip_connection = skip_connections[idx//2]
-
-            if x.shape != skip_connection.shape:
-                x = torch.nn.functional.interpolate(
-                    x, 
-                    size=skip_connection.shape[2:], 
-                    mode="bilinear", 
-                    align_corners=False
-                )
-
             concat_skip = torch.cat((skip_connection, x), dim=1)
             x = self.ups[idx+1](concat_skip)
 
@@ -126,14 +127,3 @@ def get_e_n2n_unet_model(in_channels=1, out_channels=1, device='cpu'):
                            out_channels=out_channels,
                            features=[64, 128, 256, 512])
     return model.to(device)
-
-def get_e_unet_model():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    model = get_e_n2n_unet_model()
-    model = model.to(device)
-
-    criterion = Noise2VoidLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-
-    return device, model, criterion, optimizer

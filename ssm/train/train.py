@@ -18,6 +18,7 @@ from losses.ssm_loss import custom_loss
 from utils.visualise import visualize_progress
 import torch
 
+from postprocessing.postprocessing import normalize_image
 from utils.visualise import visualize_attention_maps
 
 # Faster implementation with convolution-based neighborhood sampling
@@ -398,7 +399,6 @@ def train_speckle_separation_module_n2n(dataset,
         visualize_progress(model, batch_inputs[random_idx:random_idx+1], batch_targets[random_idx:random_idx+1], 
                         masked_tensor=masked_inputs[random_idx:random_idx+1][0][0].cpu().numpy(), epoch=epoch+1)
 
-        
 
     
         plt.close()
