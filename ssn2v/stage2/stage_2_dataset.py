@@ -123,17 +123,17 @@ def get_stage2_loaders(dataset, img_size, test_split=0.2, val_split=0.15):
     return train_loader, val_loader, test_loader
 
 
-def load_data():
+def load_data(n_patients = 4, background_thresh=0.01):
     stage1_data = r"C:\Datasets\OCTData\stage1_outputs"
 
     img_size = 256
 
-    patients = [1, 2, 3, 4]
+    patients = range(1, n_patients)  # Adjust this to the number of patients you have
 
     def normalize_image(np_img):
         if np_img.max() > 0:
             # Create mask of non-background pixels
-            foreground_mask = np_img > 0.01
+            foreground_mask = np_img > background_thresh
             if foreground_mask.any():
                 # Get min/max of only foreground pixels
                 fg_min = np_img[foreground_mask].min()
@@ -144,7 +144,7 @@ def load_data():
                     np_img[foreground_mask] = (np_img[foreground_mask] - fg_min) / (fg_max - fg_min)
         
         # Force background to be true black
-        np_img[np_img < 0.01] = 0
+        np_img[np_img < background_thresh] = 0
         return np_img
 
     stage1_dataset = {}
