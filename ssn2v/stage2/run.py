@@ -27,8 +27,6 @@ def run_stage2(config):
     model.load_state_dict(stage1_checkpoint['model_state_dict'])
     history = None
 
-    
-
     if train:
         model, history = train_stage2(
             img_size=(img_size, img_size), 

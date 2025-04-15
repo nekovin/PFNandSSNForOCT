@@ -49,12 +49,17 @@ stage1_config = {
 
 def run_stage1(stage1_config): 
 
+
     train, test, evaluate = stage1_config["train"], stage1_config["test"], stage1_config["evaluate"]
 
     img_size = stage1_config["data_config"]['img_size']
     raw_data, octa_data, dataset, name = load_stage_1_data(
        num_patients = stage1_config["data_config"]['num_patients'],
-       img_per_patient = stage1_config["data_config"]['img_per_patient'])
+       img_per_patient = stage1_config["data_config"]['img_per_patient'],
+       regular = stage1_config["data_config"]['regular'],
+       threshold = stage1_config["data_config"]['threshold'],
+       n_neighbours = stage1_config["data_config"]['n_neighbours']
+       )
 
     device = stage1_config['device']
     model = stage1_config['model'].to(device)
@@ -67,7 +72,7 @@ def run_stage1(stage1_config):
     scratch = stage1_config['train_config']['scratch']
     mask_ratio = stage1_config['train_config']['mask_ratio']
 
-    normalised_flow_masks = [normalize_image(flow_mask) for flow_mask in octa_data]
+    normalised_flow_masks = [normalize_image(flow_mask, stage1_config['data_config']["background_thresh"]) for flow_mask in octa_data]
     train_loader, val_loader, test_loader = get_stage1_loaders(normalised_flow_masks, img_size)
 
     history = {}

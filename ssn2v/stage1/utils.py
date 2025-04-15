@@ -16,10 +16,10 @@ from ssn2v.models.blind_n2v_unet import N2VUNet
 
 import matplotlib.pyplot as plt
 
-def normalize_image(np_img):
+def normalize_image(np_img, background_thresh=0.01):
     if np_img.max() > 0:
         # Create mask of non-background pixels
-        foreground_mask = np_img > 0.01
+        foreground_mask = np_img > background_thresh
         if foreground_mask.any():
             # Get min/max of only foreground pixels
             fg_min = np_img[foreground_mask].min()
@@ -30,7 +30,7 @@ def normalize_image(np_img):
                 np_img[foreground_mask] = (np_img[foreground_mask] - fg_min) / (fg_max - fg_min)
     
     # Force background to be true black
-    np_img[np_img < 0.01] = 0
+    np_img[np_img < background_thresh] = 0
     return np_img
 
 def normalize_data_np(data, target_min=0, target_max=1):
