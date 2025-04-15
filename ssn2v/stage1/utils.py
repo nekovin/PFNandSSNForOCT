@@ -10,9 +10,9 @@ from tqdm import tqdm
 
 import os 
 
-from losses.n2v_loss import Noise2VoidLoss
+from ssn2v.losses.n2v_loss import Noise2VoidLoss
 #from models.model import NoiseToVoidUNet
-from models.blind_n2v_unet import N2VUNet
+from ssn2v.models.blind_n2v_unet import N2VUNet
 
 import matplotlib.pyplot as plt
 
