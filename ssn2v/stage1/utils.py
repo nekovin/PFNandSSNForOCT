@@ -9,8 +9,6 @@ from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
 
 import os 
-import sys
-sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssn2v")
 
 from losses.n2v_loss import Noise2VoidLoss
 #from models.model import NoiseToVoidUNet
@@ -81,16 +79,6 @@ def group_pairs(noisy_sets):
 
     return noisy_pairs
 
-def get_unet_model():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    model = get_n2n_unet_model()
-    model = model.to(device)
-
-    criterion = Noise2VoidLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
-
-    return device, model, criterion, optimizer
 
 def get_stage1_loaders(flow_imgs, img_size):
 
@@ -255,3 +243,44 @@ class Stage1(Dataset):
         img = normalize_data(img)
 
         return img
+    
+
+
+def save_stage_1_data():
+    save = True
+    if save:
+        import numpy as np
+        import torch
+
+        save_dir = r"C:\Datasets\OCTData\stage1_outputs"
+
+        for patient in dataset.keys():
+
+            if not os.path.exists(save_dir+f"/{patient}"):
+                os.makedirs(save_dir+f"/{patient}")
+
+            for i in range(1, len(dataset[patient])+1):
+                
+                raw = dataset[patient][i-1][0]
+                octa = dataset[patient][i-1][1]
+                if isinstance(octa, np.ndarray):
+                    octa = torch.from_numpy(octa)
+
+                octa = octa.float().unsqueeze(0).unsqueeze(0).to('cuda')  # (1, 1, H, W)
+                with torch.no_grad():
+                    output = model(octa)
+
+                output = output.squeeze().cpu().numpy()  # (H, W)
+                #plt.imshow(output, cmap='gray')
+                #plt.title(f"patient{patient}_pair{i}_output")
+                #plt.axis('off')
+                #plt.show()
+
+                plt.imsave(os.path.join(save_dir+f"/{patient}", f"raw{i}.png"), raw, cmap='gray')
+                plt.imsave(os.path.join(save_dir+f"/{patient}", f"octa{i}.png"), output, cmap='gray')
+
+def create_blind_spot_input_fast(image, mask):
+    blind_input = image.clone()
+    #noise = torch.randn_like(image) * image.std() + image.mean()
+    blind_input = torch.where(mask > 0, torch.zeros_like(image), blind_input)
+    return blind_input
