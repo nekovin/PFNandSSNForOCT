@@ -4,8 +4,7 @@ import torch.nn.functional as F
 from torch.nn import functional as F
 import os 
 import sys
-sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\src")
-from losses.n2v_loss import Noise2VoidLoss
+from ssn2v.losses.n2v_loss import Noise2VoidLoss
 
 
 class ResDoubleConv(nn.Module):

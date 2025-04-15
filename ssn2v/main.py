@@ -1,4 +1,4 @@
-from ssn2v.stage2.stage2 import stage2
+from ssn2v.stage2.run import stage2
 
 def main():
     stage2(
