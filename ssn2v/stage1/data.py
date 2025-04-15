@@ -5,9 +5,9 @@ from .preprocessing_v2 import preprocessing_v2
 import matplotlib.pyplot as plt
 from matplotlib.colors import NoNorm
 
-def load_stage_1_data(regular=False, num_patients=4, img_per_patient=50):
-
-    
+def load_stage_1_data(
+        regular=False, num_patients=4, img_per_patient=50, threshold=80, n_neighbours=5, sample=False, post_process_size=40
+        ):
 
     n_patients = num_patients
     n = img_per_patient
@@ -15,14 +15,17 @@ def load_stage_1_data(regular=False, num_patients=4, img_per_patient=50):
 
 
     if regular:
-        dataset = preprocessing(n_patients, n_images_per_patient, n_neighbours = 2,  threshold=50) #n neighbours must be 2
+        dataset = preprocessing(n_patients, n_images_per_patient, n_neighbours = 2,  threshold=threshold) #n neighbours must be 2
         name = "regular"
     else:
-        dataset = preprocessing_v2(n_patients, n_images_per_patient, n_neighbours = 5, threshold=80, sample=False, post_process_size=40)
+        dataset = preprocessing_v2(
+            n_patients, n_images_per_patient, n_neighbours = n_neighbours, 
+            threshold=threshold, sample=False, post_process_size=post_process_size)
         name = "v2"
 
     print(f"Dataset size: {len(dataset)}")
 
+    '''
     patient = n_patients - 1
 
     print(f"Dataset size: {len(dataset[patient])}")
@@ -38,6 +41,7 @@ def load_stage_1_data(regular=False, num_patients=4, img_per_patient=50):
     ax[1].set_title("OCTA Image")
     ax[1].axis('off')
     plt.show()
+    '''
 
     raw_data = []
     octa_data = []
