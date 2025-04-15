@@ -9,8 +9,8 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from torchvision import transforms
-from ssn2v.preprocessing.preprocessing import preprocessing
-from ssn2v.preprocessing.preprocessing_v2 import preprocessing_v2
+from ssn2v.stage1.preprocessing import preprocessing
+from ssn2v.stage1.preprocessing_v2 import preprocessing_v2
 
 class Stage2(Dataset):
     def __init__(self, data_by_patient, transform=None):

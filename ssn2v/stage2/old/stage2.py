@@ -12,7 +12,7 @@ import torch.nn.functional as F
 
 import torch
 import torch.nn as nn
-from stage1.utils.utils import normalize_image, get_stage1_loaders, get_unet_model, normalize_data
+from ssn2v.stage1.utils import normalize_image, get_stage1_loaders, get_unet_model, normalize_data
 from models.enhanced_n2v_unet import get_e_unet_model
 
 
