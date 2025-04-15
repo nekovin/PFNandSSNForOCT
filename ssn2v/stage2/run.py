@@ -14,7 +14,9 @@ def run_stage2(config):
 
     # load data
     img_size = config["data_config"]['img_size']
-    train_loader, val_loader, test_loader = load_data()
+    n_patients = config["data_config"]['num_patients']
+    background_thresh = config["data_config"]['background_thresh']
+    train_loader, val_loader, test_loader = load_data(n_patients, background_thresh)
 
     # training config
     device = config['device']
