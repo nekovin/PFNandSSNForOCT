@@ -12,8 +12,8 @@ def run_batch():
 
 def train_stage1(img_size, model, train_loader, val_loader, criterion, optimizer, epochs=10, device='cuda', scratch=False, save_path=None, mask_ratio = 0.1, visualise=False):
 
-    if not os.path.exists('checkpoints'):
-        os.makedirs('checkpoints')
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
 
     if scratch:
         model = model
