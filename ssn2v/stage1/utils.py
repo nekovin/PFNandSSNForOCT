@@ -13,9 +13,9 @@ from matplotlib.colors import NoNorm
 
 import os 
 
-from ssn2v.losses.n2v_loss import Noise2VoidLoss
+from losses.n2v_loss import Noise2VoidLoss
 #from models.model import NoiseToVoidUNet
-from ssn2v.models.blind_n2v_unet import N2VUNet
+from models.blind_n2v_unet import N2VUNet
 
 import matplotlib.pyplot as plt
 

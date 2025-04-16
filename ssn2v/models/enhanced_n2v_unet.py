@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.nn import functional as F
 import os 
 import sys
-from ssn2v.losses.n2v_loss import Noise2VoidLoss
+from losses.n2v_loss import Noise2VoidLoss
 
 class ResDoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):

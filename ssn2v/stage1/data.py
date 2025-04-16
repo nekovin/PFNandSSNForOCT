@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import NoNorm
 
 def load_stage_1_data(
-        regular=False, num_patients=4, img_per_patient=50, threshold=80, n_neighbours=5, sample=False, post_process_size=40
+        regular=False, num_patients=4, img_per_patient=50, threshold=80, n_neighbours=5, post_process_size=40
         ):
 
     n_patients = num_patients
@@ -20,7 +20,7 @@ def load_stage_1_data(
     else:
         dataset = preprocessing_v2(
             n_patients, n_images_per_patient, n_neighbours = n_neighbours, 
-            threshold=threshold, sample=False, post_process_size=post_process_size)
+            threshold=threshold, post_process_size=post_process_size)
         name = "v2"
 
     print(f"Dataset size: {len(dataset)}")
