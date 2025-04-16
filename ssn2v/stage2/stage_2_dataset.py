@@ -191,4 +191,4 @@ def load_data(n_patients = 4, background_thresh=0.01):
         for i in range(len(dataset[patient])):
             dataset[patient][i].append(stage1_dataset[patient][i+1]['octa'])
 
-    return get_stage2_loaders(dataset, img_size, test_split=0.2, val_split=0.15)
+    return dataset

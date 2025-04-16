@@ -47,19 +47,11 @@ stage1_config = {
 }
 '''
 
-def run_stage1(stage1_config): 
+def run_stage1(octa_data, stage1_config): 
 
 
     train, test, evaluate = stage1_config["train"], stage1_config["test"], stage1_config["evaluate"]
-
-    img_size = stage1_config["data_config"]['img_size']
-    raw_data, octa_data, dataset, name = load_stage_1_data(
-       num_patients = stage1_config["data_config"]['num_patients'],
-       img_per_patient = stage1_config["data_config"]['img_per_patient'],
-       regular = stage1_config["data_config"]['regular'],
-       threshold = stage1_config["data_config"]['threshold'],
-       n_neighbours = stage1_config["data_config"]['n_neighbours']
-       )
+    img_size = stage1_config['data_config']["img_size"]
 
     device = stage1_config['device']
     model = stage1_config['model'].to(device)
@@ -79,11 +71,17 @@ def run_stage1(stage1_config):
     
     if train:
       model, history = train_stage1(
-          img_size, model, train_loader, val_loader, 
-          criterion, optimizer, 
-          num_epochs, device, scratch, 
+          img_size, 
+          model, 
+          train_loader, 
+          val_loader, 
+          criterion, 
+          optimizer=optimizer, 
+          epochs=num_epochs, 
+          device=device, 
+          scratch=scratch, 
           save_path=checkpoint_path,
-            mask_ratio=mask_ratio, 
-            visualise=visualise)
+          mask_ratio=mask_ratio, 
+          visualise=visualise)
 
     return model, history, train_loader, val_loader, test_loader

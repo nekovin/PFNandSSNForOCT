@@ -3,20 +3,21 @@ sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssn2v")
 
 import torch
 
-from ssn2v.stage2.stage_2_dataset import load_data
+
+from ssn2v.stage2.stage_2_dataset import get_stage2_loaders
 from ssn2v.stage2.train import train_stage2
 from ssn2v.stage2.eval import evaluate_model
 
-def run_stage2(config):
+def run_stage2(dataset, config):
 
     # modes
     train, test, evaluate = config["train"], config["test"], config["evaluate"]
 
     # load data
     img_size = config["data_config"]['img_size']
-    n_patients = config["data_config"]['num_patients']
-    background_thresh = config["data_config"]['background_thresh']
-    train_loader, val_loader, test_loader = load_data(n_patients, background_thresh)
+
+    train_loader, val_loader, test_loader = get_stage2_loaders(dataset, img_size, test_split=0.2, val_split=0.15) 
+
 
     # training config
     device = config['device']

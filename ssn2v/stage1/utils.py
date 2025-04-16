@@ -7,6 +7,9 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader, Dataset
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from IPython.display import clear_output
+from matplotlib.colors import NoNorm
 
 import os 
 
@@ -284,3 +287,70 @@ def create_blind_spot_input_fast(image, mask):
     #noise = torch.randn_like(image) * image.std() + image.mean()
     blind_input = torch.where(mask > 0, torch.zeros_like(image), blind_input)
     return blind_input
+
+def visualise_n2v(blind_input, target_img, output, mask=None):
+    """
+    Visualize the N2V process with mask overlay
+    
+    Args:
+        blind_input: Input with blind spots
+        target_img: Target noisy image
+        output: Model prediction
+        mask: Binary mask showing pixel positions for N2V
+    """
+    # Normalize output to match input scale
+    output = torch.from_numpy(output).float()
+    #output = normalize_data(output)
+    
+    clear_output(wait=True)
+    
+    # If mask is provided, show 4 images including mask
+    if mask is not None:
+        fig, axes = plt.subplots(1, 4, figsize=(24, 6))
+        
+        # Plot blind spot input
+        axes[0].imshow(blind_input.squeeze(), cmap='gray', norm=NoNorm())
+        axes[0].axis('off')
+        axes[0].set_title('Blind-spot Input')
+        
+        # Plot model output
+        axes[1].imshow(output.squeeze(), cmap='gray', norm=NoNorm())
+        axes[1].axis('off')
+        axes[1].set_title('Output Image')
+        
+        # Plot target image
+        axes[2].imshow(target_img.squeeze(), cmap='gray', norm=NoNorm())
+        axes[2].axis('off')
+        axes[2].set_title('Target Noisy Image')
+    
+    # Otherwise use original 3-image layout
+    else:
+        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
+        axes[0].imshow(blind_input.squeeze(), cmap='gray')
+        axes[0].axis('off')
+        axes[0].set_title('Blind-spot Input')
+        
+        axes[1].imshow(output.squeeze(), cmap='gray')
+        axes[1].axis('off')
+        axes[1].set_title('Output Image')
+        
+        axes[2].imshow(target_img.squeeze(), cmap='gray')
+        axes[2].axis('off')
+        axes[2].set_title('Target Noisy Image')
+    
+    plt.tight_layout()
+    plt.show()
+
+def save_model(model, optimizer, epoch, train_loss, val_loss, history, save_path):
+    print(f"Saving model with val loss: {val_loss:.6f} from epoch {epoch+1}")
+    if not os.path.exists(os.path.dirname(save_path)):
+        os.makedirs(os.path.dirname(save_path))
+
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'train_loss': train_loss,
+        'val_loss': val_loss,
+        'history': history
+    }, save_path)
