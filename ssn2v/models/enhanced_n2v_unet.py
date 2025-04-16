@@ -4,13 +4,7 @@ import torch.nn.functional as F
 from torch.nn import functional as F
 import os 
 import sys
-<<<<<<< HEAD
-sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\src")
-from losses.n2v_loss import Noise2VoidLoss
-=======
 from ssn2v.losses.n2v_loss import Noise2VoidLoss
->>>>>>> ssn2v_implementation
-
 
 class ResDoubleConv(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels=None):

@@ -1,14 +1,46 @@
 import os 
 import torch
-import matplotlib.pyplot as plt
-from IPython.display import clear_output
-from matplotlib.colors import NoNorm
 
-from .utils import create_blind_spot_input_fast, plot_loss
+from .utils import create_blind_spot_input_fast, plot_loss, visualise_n2v, save_model
 
 
-def run_batch():
-    pass
+def run_batch(loader, model, criterion, optimizer, device, mask_ratio, visualise):
+
+
+    running_loss = 0.0
+
+    for batch_idx, octa in enumerate(loader):
+        octa = octa.to(device)
+
+        mask = torch.bernoulli(torch.full((octa.size(0), 1, octa.size(2), octa.size(3)), 
+                                        mask_ratio, device=device))
+        
+        blind_octa = create_blind_spot_input_fast(octa, mask)
+
+        if model.training:
+            optimizer.zero_grad()
+
+        outputs = model(blind_octa)
+
+        #outputs = normalize_data(outputs, octa)
+
+        loss = criterion(outputs, octa)
+        
+        if model.training:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+        
+        running_loss += loss.item()
+
+        if visualise:
+            visualise_n2v(
+                blind_octa.cpu().detach().numpy(),
+                octa.cpu().detach().numpy(),
+                outputs.cpu().detach().numpy(),
+            )
+
+        return running_loss / len(loader)
 
 def train_stage1(img_size, model, train_loader, val_loader, criterion, optimizer, epochs=10, device='cuda', scratch=False, save_path=None, mask_ratio = 0.1, visualise=False):
 
@@ -35,47 +67,18 @@ def train_stage1(img_size, model, train_loader, val_loader, criterion, optimizer
             old_epoch = 0
 
     model = model.to(device)
+
     best_val_loss = float('inf')
     
     for epoch in range(epochs):
-        print(f"Epoch {epoch+1}")
-        if torch.cuda.is_available():
-            print(f"GPU memory: {torch.cuda.memory_allocated()/1e9:.2f} GB")
 
-        # Training phase
         model.train()
-        running_loss = 0.0
 
+        train_loss = run_batch(train_loader, model, criterion, optimizer, device, mask_ratio, visualise)
         
-        for batch_idx, octa in enumerate(train_loader):
-            octa = octa.to(device)
+        avg_train_loss = train_loss / len(train_loader)
 
-            mask = torch.bernoulli(torch.full((octa.size(0), 1, octa.size(2), octa.size(3)), 
-                                            mask_ratio, device=device))
-            
-            blind_octa = create_blind_spot_input_fast(octa, mask)
-
-            optimizer.zero_grad()
-
-            outputs = model(blind_octa)
-
-            #outputs = normalize_data(outputs, octa)
-
-            loss = criterion(outputs, octa)
-            
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
-            
-            running_loss += loss.item()
-
-        print(f"Epoch {epoch+1} finished")
-        
-        avg_train_loss = running_loss / len(train_loader)
-        
-        print("Validating")
-        val_loss = validate_n2v(model, val_loader, criterion, mask_ratio, device, visualise=visualise)
-        print("Validation finished")
+        val_loss = validate_n2v(model, val_loader, criterion, mask_ratio, device, visualise)
 
         history['train_loss'].append(avg_train_loss)
         history['val_loss'].append(val_loss)
@@ -84,18 +87,9 @@ def train_stage1(img_size, model, train_loader, val_loader, criterion, optimizer
             plot_loss(history['train_loss'], history['val_loss'])
         
         if val_loss < best_val_loss:
-            print(f"Saving model with val loss: {val_loss:.6f} from epoch {epoch+1}")
             best_val_loss = val_loss
             try:
-                torch.save({
-                    'epoch': epoch + old_epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'train_loss': avg_train_loss,
-                    'val_loss': val_loss,
-                    'history': history
-                }, save_path)
-            
+                save_model(model, optimizer, epoch, avg_train_loss, val_loss, history, save_path)
             except:
                 print("Err")
         print(f"Epoch {epoch+1}, Training Loss: {avg_train_loss:.6f}, Validation Loss: {val_loss:.6f}")
@@ -103,87 +97,12 @@ def train_stage1(img_size, model, train_loader, val_loader, criterion, optimizer
 
     return model, history
 
-
-
-def visualise_n2v(blind_input, target_img, output, mask=None):
-    """
-    Visualize the N2V process with mask overlay
-    
-    Args:
-        blind_input: Input with blind spots
-        target_img: Target noisy image
-        output: Model prediction
-        mask: Binary mask showing pixel positions for N2V
-    """
-    # Normalize output to match input scale
-    output = torch.from_numpy(output).float()
-    #output = normalize_data(output)
-    
-    clear_output(wait=True)
-    
-    # If mask is provided, show 4 images including mask
-    if mask is not None:
-        fig, axes = plt.subplots(1, 4, figsize=(24, 6))
-        
-        # Plot blind spot input
-        axes[0].imshow(blind_input.squeeze(), cmap='gray', norm=NoNorm())
-        axes[0].axis('off')
-        axes[0].set_title('Blind-spot Input')
-        
-        # Plot model output
-        axes[1].imshow(output.squeeze(), cmap='gray', norm=NoNorm())
-        axes[1].axis('off')
-        axes[1].set_title('Output Image')
-        
-        # Plot target image
-        axes[2].imshow(target_img.squeeze(), cmap='gray', norm=NoNorm())
-        axes[2].axis('off')
-        axes[2].set_title('Target Noisy Image')
-    
-    # Otherwise use original 3-image layout
-    else:
-        fig, axes = plt.subplots(1, 3, figsize=(20, 6))
-        axes[0].imshow(blind_input.squeeze(), cmap='gray')
-        axes[0].axis('off')
-        axes[0].set_title('Blind-spot Input')
-        
-        axes[1].imshow(output.squeeze(), cmap='gray')
-        axes[1].axis('off')
-        axes[1].set_title('Output Image')
-        
-        axes[2].imshow(target_img.squeeze(), cmap='gray')
-        axes[2].axis('off')
-        axes[2].set_title('Target Noisy Image')
-    
-    plt.tight_layout()
-    plt.show()
-
 def validate_n2v(model, val_loader, criterion, mask_ratio, device='cuda', visualise=False):
     model.eval()
-    total_loss = 0.0
+    val_loss = 0.0
     
     with torch.no_grad():
         for octa in val_loader:
-            octa = octa.to(device)
-
-            mask = torch.bernoulli(torch.full((octa.size(0), 1, octa.size(2), octa.size(3)), 
-                                            mask_ratio, device=device))
-            
-            blind_octa = create_blind_spot_input_fast(octa, mask)
-            
-            outputs = model(blind_octa)
-                
-            #outputs = normalize_data(outputs) 
-
-            loss = criterion(outputs, octa)
-            
-            total_loss += loss.item()
-            
-            if visualise:
-                visualise_n2v(
-                    blind_octa.cpu().detach().numpy(),
-                    octa.cpu().detach().numpy(),
-                    outputs.cpu().detach().numpy(),
-                )
+            val_loss = run_batch(val_loader, model, criterion, None, device, mask_ratio, visualise)
     
-    return total_loss / len(val_loader)
+    return val_loss / len(val_loader)

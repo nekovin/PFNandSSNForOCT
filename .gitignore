@@ -32,9 +32,6 @@ build/
 *.swp
 *.swo
 
-<<<<<<< HEAD
-data/
-=======
 data/
 
 stage2/old
@@ -43,4 +40,3 @@ ssn2v/outputs
 ssn2v/stage2/checkpoints
 
 notebook
->>>>>>> ssn2v_implementation
