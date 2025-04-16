@@ -1,7 +1,7 @@
 import torch
 import matplotlib.pyplot as plt
 from matplotlib.colors import NoNorm
-from ssn2v.stage2.utils import normalize_image_torch
+from stage2.utils import normalize_image_torch
 
 def evaluate_model(model, train_loader, device):
     # Set model to evaluation mode

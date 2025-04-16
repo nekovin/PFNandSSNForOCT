@@ -4,9 +4,9 @@ sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssn2v")
 import torch
 
 
-from ssn2v.stage2.stage_2_dataset import get_stage2_loaders
-from ssn2v.stage2.train import train_stage2
-from ssn2v.stage2.eval import evaluate_model
+from stage2.stage_2_dataset import get_stage2_loaders
+from stage2.train import train_stage2
+from stage2.eval import evaluate_model
 
 def run_stage2(dataset, config):
 

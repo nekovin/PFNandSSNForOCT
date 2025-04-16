@@ -3,12 +3,12 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from ssn2v.stage2.mask import create_blind_spot_input_with_realistic_noise
-from ssn2v.stage2.octa import compute_octa
-from ssn2v.stage2.threshold import enhanced_differentiable_threshold_octa_torch
-from ssn2v.stage2.vis import visualise_n2v, plot_loss
-from ssn2v.stage2.utils import normalize_image_torch, load
-from ssn2v.stage2.loss import octa_criterion
+from stage2.mask import create_blind_spot_input_with_realistic_noise
+from stage2.octa import compute_octa
+from stage2.threshold import enhanced_differentiable_threshold_octa_torch
+from stage2.vis import visualise_n2v, plot_loss
+from stage2.utils import normalize_image_torch, load
+from stage2.loss import octa_criterion
 
 def process_batch(
         model, loader, criterion, threshold, octa_criterion, mask_ratio, alpha,

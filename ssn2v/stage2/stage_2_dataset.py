@@ -9,8 +9,8 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from torchvision import transforms
-from ssn2v.stage1.preprocessing import preprocessing
-from ssn2v.stage1.preprocessing_v2 import preprocessing_v2
+from stage1.preprocessing import preprocessing
+from stage1.preprocessing_v2 import preprocessing_v2
 
 class Stage2(Dataset):
     def __init__(self, data_by_patient, transform=None):
@@ -123,7 +123,11 @@ def get_stage2_loaders(dataset, img_size, test_split=0.2, val_split=0.15):
     return train_loader, val_loader, test_loader
 
 
-def load_data(n_patients = 4, background_thresh=0.01):
+def load_data(stage2_config):
+    #n_patients = 4, background_thresh=0.01
+    img_size = stage2_config["data_config"]['img_size']
+    n_patients = stage2_config["data_config"]['num_patients']
+    background_thresh = stage2_config["data_config"]['background_thresh']
     stage1_data = r"C:\Datasets\OCTData\stage1_outputs"
 
     img_size = 256
@@ -171,22 +175,19 @@ def load_data(n_patients = 4, background_thresh=0.01):
             stage1_dataset[patient][i]['raw'] = raw_img
             stage1_dataset[patient][i]['octa'] = octa_img[:,:,1]
 
-    regular = False
-
     n_patients = len(patients)
     n = 50
     n_images_per_patient = max(10, n)
+
+    regular = stage2_config['data_config']['regular']
 
 
     if regular:
         dataset = preprocessing(n_patients, n_images_per_patient, n_neighbours = 2,  threshold=0) #n neighbours must be 2
         name = "regular"
     else:
-        dataset = preprocessing_v2(n_patients, n_images_per_patient, n_neighbours = 5, threshold=60, sample=False, post_process_size=10)
+        dataset = preprocessing_v2(n_patients, n_images_per_patient, n_neighbours = stage2_config['data_config']['n_neighbours'], threshold=stage2_config['data_config']['background_thresh'], post_process_size=stage2_config['data_config']['post_process_size'])
         name = "v2"
-
-    print(f"Dataset {name} created with {len(dataset)} images")
-
     for patient in dataset.keys():
         for i in range(len(dataset[patient])):
             dataset[patient][i].append(stage1_dataset[patient][i+1]['octa'])
