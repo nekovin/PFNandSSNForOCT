@@ -127,7 +127,7 @@ def load_data(stage2_config):
     #n_patients = 4, background_thresh=0.01
     img_size = stage2_config["data_config"]['img_size']
     n_patients = stage2_config["data_config"]['num_patients']
-    background_thresh = stage2_config["data_config"]['background_thresh']
+    background_thresh = stage2_config["data_config"]['background_threshold']
     stage1_data = r"C:\Datasets\OCTData\stage1_outputs"
 
     img_size = 256
@@ -186,7 +186,7 @@ def load_data(stage2_config):
         dataset = preprocessing(n_patients, n_images_per_patient, n_neighbours = 2,  threshold=0) #n neighbours must be 2
         name = "regular"
     else:
-        dataset = preprocessing_v2(n_patients, n_images_per_patient, n_neighbours = stage2_config['data_config']['n_neighbours'], threshold=stage2_config['data_config']['background_thresh'], post_process_size=stage2_config['data_config']['post_process_size'])
+        dataset = preprocessing_v2(n_patients, n_images_per_patient, n_neighbours = stage2_config['data_config']['n_neighbours'], threshold=background_thresh, post_process_size=stage2_config['data_config']['post_process_size'])
         name = "v2"
     for patient in dataset.keys():
         for i in range(len(dataset[patient])):
