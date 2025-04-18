@@ -48,3 +48,4 @@ noise2self
 noise2void
 
 **/checkpoints/
+*.pth
