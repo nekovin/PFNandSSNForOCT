@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from torchvision import transforms
 from stage1.preprocessing import preprocessing
 from stage1.preprocessing_v2 import preprocessing_v2
+from ssn2v.stage1.preprocessing import preprocessing
+from ssn2v.stage1.preprocessing_v2 import preprocessing_v2
 
 class Stage2(Dataset):
     def __init__(self, data_by_patient, transform=None):
@@ -123,11 +125,15 @@ def get_stage2_loaders(dataset, img_size, test_split=0.2, val_split=0.15):
     return train_loader, val_loader, test_loader
 
 
+<<<<<<< HEAD
 def load_data(stage2_config):
     #n_patients = 4, background_thresh=0.01
     img_size = stage2_config["data_config"]['img_size']
     n_patients = stage2_config["data_config"]['num_patients']
     background_thresh = stage2_config["data_config"]['background_threshold']
+=======
+def load_data(n_patients = 4, background_thresh=0.01):
+>>>>>>> 82af4e90037992d5d62fb93459cc677793d4c067
     stage1_data = r"C:\Datasets\OCTData\stage1_outputs"
 
     img_size = 256

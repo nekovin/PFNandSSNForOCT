@@ -67,6 +67,8 @@ def run_stage1(octa_data, stage1_config):
 
     #normalised_flow_masks = [normalize_image(flow_mask, background_thresh) for flow_mask in octa_data]
     normalised_flow_masks = octa_data
+
+    normalised_flow_masks = [normalize_image(flow_mask, stage1_config['data_config']["background_thresh"]) for flow_mask in octa_data]
     train_loader, val_loader, test_loader = get_stage1_loaders(normalised_flow_masks, img_size)
 
     history = {}

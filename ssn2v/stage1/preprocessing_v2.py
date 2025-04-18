@@ -273,6 +273,15 @@ def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold
     try:
         for i in range(1, n_patients+1):
             print(f"Processing patient {i}/{n_patients}")
+def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
+    
+    if sample:
+        begin = n_patients-1
+    else:
+        begin = 1
+    dataset = {}
+    try:
+        for i in range(begin, n_patients):
             data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
             preprocessed_data = standard_preprocessing(data)
             octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)

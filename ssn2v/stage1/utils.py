@@ -16,6 +16,9 @@ import os
 from losses.n2v_loss import Noise2VoidLoss
 #from models.model import NoiseToVoidUNet
 from models.blind_n2v_unet import N2VUNet
+from ssn2v.losses.n2v_loss import Noise2VoidLoss
+#from models.model import NoiseToVoidUNet
+from ssn2v.models.blind_n2v_unet import N2VUNet
 
 import matplotlib.pyplot as plt
 
@@ -247,6 +250,44 @@ class Stage1(Dataset):
 
         return img
     
+<<<<<<< HEAD
+=======
+
+
+def save_stage_1_data():
+    save = True
+    if save:
+        import numpy as np
+        import torch
+
+        save_dir = r"C:\Datasets\OCTData\stage1_outputs"
+
+        for patient in dataset.keys():
+
+            if not os.path.exists(save_dir+f"/{patient}"):
+                os.makedirs(save_dir+f"/{patient}")
+
+            for i in range(1, len(dataset[patient])+1):
+                
+                raw = dataset[patient][i-1][0]
+                octa = dataset[patient][i-1][1]
+                if isinstance(octa, np.ndarray):
+                    octa = torch.from_numpy(octa)
+
+                octa = octa.float().unsqueeze(0).unsqueeze(0).to('cuda')  # (1, 1, H, W)
+                with torch.no_grad():
+                    output = model(octa)
+
+                output = output.squeeze().cpu().numpy()  # (H, W)
+                #plt.imshow(output, cmap='gray')
+                #plt.title(f"patient{patient}_pair{i}_output")
+                #plt.axis('off')
+                #plt.show()
+
+                plt.imsave(os.path.join(save_dir+f"/{patient}", f"raw{i}.png"), raw, cmap='gray')
+                plt.imsave(os.path.join(save_dir+f"/{patient}", f"octa{i}.png"), output, cmap='gray')
+
+>>>>>>> 82af4e90037992d5d62fb93459cc677793d4c067
 def create_blind_spot_input_fast(image, mask):
     blind_input = image.clone()
     #noise = torch.randn_like(image) * image.std() + image.mean()
@@ -318,5 +359,9 @@ def save_model(model, optimizer, epoch, train_loss, val_loss, history, save_path
         'train_loss': train_loss,
         'val_loss': val_loss,
         'history': history
+<<<<<<< HEAD
     }, save_path)
 
+=======
+    }, save_path)
+>>>>>>> 82af4e90037992d5d62fb93459cc677793d4c067
