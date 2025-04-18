@@ -40,3 +40,9 @@ ssn2v/outputs
 ssn2v/stage2/checkpoints
 
 notebook
+
+noise2noise
+
+noise2self
+
+noise2void
