@@ -21,3 +21,6 @@ https://github.com/NVlabs/noise2noise
 
 n2s/
 https://github.com/czbiohub-sf/noise2self
+
+classification/
+https://github.com/Sudhandar/ResNet-50-model
