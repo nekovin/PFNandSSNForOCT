@@ -9,7 +9,6 @@ def parse_config(config):
     for section, values in config.items():
         parsed_config[section] = {}
         for key, value in values.items():
-            # Handle learning rate
             if key == 'learning_rate' and isinstance(value, str):
                 if 'e' in value.lower():
                     parsed_config[section][key] = float(value)
@@ -21,12 +20,12 @@ def parse_config(config):
                     parsed_config[section][key] = nn.MSELoss()
                 elif value == 'nn.L1Loss()':
                     parsed_config[section][key] = nn.L1Loss()
-                # Add other loss functions as needed
                 else:
                     parsed_config[section][key] = value
             
             elif key == 'optimizer' and isinstance(value, str):
                 parsed_config[section][key] = value
+
             
             else:
                 parsed_config[section][key] = value

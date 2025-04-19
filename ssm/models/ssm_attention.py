@@ -415,7 +415,9 @@ def get_ssm_model(input_channels=1, feature_dim=32, depth=5, block_depth=3, chec
         An instance of the SpeckleSeparationUNetAttention model
     """
     model = SpeckleSeparationUNetAttention(input_channels, feature_dim, depth, block_depth)
+    
     if checkpoint:
         checkpoint = torch.load(checkpoint, map_location='cpu')
         model.load_state_dict(checkpoint['model_state_dict'])
+
     return model
