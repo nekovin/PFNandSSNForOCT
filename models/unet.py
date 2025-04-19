@@ -51,13 +51,15 @@ class UNet(nn.Module):
         
         return self.final(final)
     
-def load_unet(device=None, load=False):
+def load_unet(config): # checkpoint_path = r'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\baselines\n2n\checkpoints\noise2noise_final.pth',device=None, load=False
+    checkpoint_path = config['training']['checkpoint_path']
+    load = config['training']['load']
     if not device:
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model = UNet(in_channels=1, out_channels=1).to(device)
     if load:
         try:
-            model.load_state_dict(torch.load(r'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\baselines\n2n\checkpoints\noise2noise_final.pth', map_location=device))
+            model.load_state_dict(torch.load(checkpoint_path, map_location=device))
             model.to(device)
         except Exception as e:
             print(f"Error loading model: {e}")

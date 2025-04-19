@@ -270,13 +270,9 @@ def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold
 
 def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
     
-    if sample:
-        begin = n_patients-1
-    else:
-        begin = 1
     dataset = {}
     try:
-        for i in range(begin, n_patients):
+        for i in range(1, n_patients+1):
             data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
             preprocessed_data = standard_preprocessing(data)
             octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)
@@ -301,7 +297,7 @@ def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold
 
 
 class OCTDataset(Dataset):
-    def __init__(self, n_patients=40, n_images_per_patient=50, transform=None):
+    def __init__(self, n_patients=2, n_images_per_patient=50, transform=None):
         """
         Dataset class for OCT images
         
@@ -352,8 +348,34 @@ class OCTDataset(Dataset):
             target_tensor = self.transform(target_tensor)
             
         return input_tensor, target_tensor
+
+def get_loaders(n_patients=2, n_images_per_patient=50, batch_size=8, 
+                val_split=0.2, shuffle=True, random_seed=42):
+
+    full_dataset = OCTDataset(n_patients=n_patients, n_images_per_patient=n_images_per_patient)
     
-def get_loaders(n_patients, n_images_per_patient=50, batch_size=8):
-    dataset = OCTDataset(n_patients=n_patients, n_images_per_patient=50)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0)
-    return dataloader
+    dataset_size = len(full_dataset)
+    val_size = int(val_split * dataset_size)
+    train_size = dataset_size - val_size
+    
+    train_dataset, val_dataset = torch.utils.data.random_split(
+        full_dataset, 
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(random_seed)
+    )
+    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=shuffle, 
+        num_workers=0
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        num_workers=0
+    )
+    
+    return train_loader, val_loader

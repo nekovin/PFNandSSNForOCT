@@ -49,3 +49,5 @@ noise2void
 
 **/checkpoints/
 *.pth
+*.ipynb
+*.yaml
