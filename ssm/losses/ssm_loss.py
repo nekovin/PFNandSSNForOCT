@@ -187,8 +187,6 @@ def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, lo
 
     foreground_mask = (batch_targets > 0.03).float()
     background_mask = 1.0 - foreground_mask
-
-    plt.imshow(foreground_mask.cpu().numpy()[0][0], cmap='gray')
     
     # not very elegant just mse loss between masked flow and target
     pixel_wise_loss = mse(flow_component, batch_targets)

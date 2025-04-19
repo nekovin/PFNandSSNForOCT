@@ -51,3 +51,4 @@ noise2void
 *.pth
 *.ipynb
 *.yaml
+*.png

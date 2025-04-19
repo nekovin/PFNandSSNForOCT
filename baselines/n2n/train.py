@@ -6,9 +6,13 @@ import torch
 from data_loading import get_loaders
 from models.unet import UNet
 from torch import nn
-from visualise import plot_images
+from visualise import plot_images, plot_computation_graph
 
-def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise):
+def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise): 
+    """
+    Process a batch of data through the model, compute loss, and update weights.
+    WITHOUT speckle module.
+    """
     epoch_loss = 0
     for batch_idx, (input_imgs, target_imgs) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
@@ -35,20 +39,25 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
 
         return epoch_loss
     
-def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module):
+def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha):
     epoch_loss = 0
     for batch_idx, (input_imgs, target_imgs) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
         target_imgs = target_imgs.to(device)
         
         if speckle_module is not None:
-            processed_inputs = speckle_module(input_imgs)
-            processed_inputs = processed_inputs['flow_component']
-            outputs = model(processed_inputs)
+            flow_inputs = speckle_module(input_imgs)
+            flow_inputs = flow_inputs['flow_component'].detach()
+            outputs = model(input_imgs)
+            flow_outputs = speckle_module(outputs)
+            flow_outputs = flow_outputs['flow_component'].detach()
+            flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
+            
+            loss = criterion(outputs, target_imgs) + flow_loss * alpha # make alpha a hyperparameter
         else:
             outputs = model(input_imgs)
             
-        loss = criterion(outputs, target_imgs)
+            loss = criterion(outputs, target_imgs) 
         
         optimizer.zero_grad()
         loss.backward()
@@ -65,30 +74,43 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
             assert outputs[0][0].shape == (256, 256)
             
             if speckle_module is not None:
+                titles = ['Input Image', 'Flow Input', 'Flow Output', 'Target Image', 'Output Image']
                 images = [
                     input_imgs[0][0].cpu().numpy(), 
-                    processed_inputs[0][0].cpu().detach().numpy(),
+                    flow_inputs[0][0].cpu().detach().numpy(),
+                    flow_outputs[0][0].cpu().detach().numpy(),
                     target_imgs[0][0].cpu().numpy(), 
                     outputs[0][0].cpu().detach().numpy()
                 ]
+                losses = {
+                    'Flow Loss': flow_loss.item(),
+                    'Total Loss': loss.item()
+                }
             else:
+                titles = ['Input Image', 'Target Image', 'Output Image']
                 images = [
                     input_imgs[0][0].cpu().numpy(), 
                     target_imgs[0][0].cpu().numpy(), 
                     outputs[0][0].cpu().detach().numpy()
                 ]
-            plot_images(images)
+                losses = {
+                    'Total Loss': loss.item()
+                }
+            plot_images(images, titles, losses)
+
+            if epoch == 1:
+                plot_computation_graph(model, loss, speckle_module)
 
     return epoch_loss
 
-def train(model, train_loader, val_loader, optimizer=None, criterion=None, epochs=100, batch_size=8, lr=0.001, save_dir='n2n/checkpoints',device='cuda', visualise=False, speckle_module=None):
+def train(model, train_loader, val_loader, optimizer=None, criterion=None, epochs=100, batch_size=8, lr=0.001, save_dir='n2n/checkpoints',device='cuda', visualise=False, speckle_module=None, alpha=1):
     os.makedirs(save_dir, exist_ok=True)
     
     start_time = time.time()
     for epoch in range(epochs):
         model.train()
 
-        epoch_loss = process_batch(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module)
+        epoch_loss = process_batch(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
         
         avg_epoch_loss = epoch_loss / len(train_loader)
 
@@ -148,6 +170,7 @@ def train_noise2noise(config):
             ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
             speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
             speckle_module.to(device)
+            alpha = config['speckle_module']['alpha']
         except Exception as e:
             print(f"Error loading model: {e}")
             print("Starting training from scratch.")
@@ -176,7 +199,8 @@ def train_noise2noise(config):
             save_dir=save_dir,
             device=device,
             visualise=visualise,
-            speckle_module=speckle_module)
+            speckle_module=speckle_module,
+            alpha=alpha)
 
 if __name__ == "__main__":
     train_noise2noise()

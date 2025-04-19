@@ -400,3 +400,22 @@ class SpeckleSeparationUNetAttention(nn.Module):
             'flow_component': flow_component,
             'noise_component': noise_component
         }
+    
+def get_ssm_model(input_channels=1, feature_dim=32, depth=5, block_depth=3, checkpoint=None):
+    """
+    Function to create and return the Speckle Separation Module model
+    
+    Args:
+        input_channels: Number of input image channels (default: 1 for grayscale OCT)
+        feature_dim: Initial dimension of feature maps
+        depth: Depth of the U-Net (number of downsampling/upsampling operations)
+        block_depth: Number of convolution layers in each encoder/decoder block
+        
+    Returns:
+        An instance of the SpeckleSeparationUNetAttention model
+    """
+    model = SpeckleSeparationUNetAttention(input_channels, feature_dim, depth, block_depth)
+    if checkpoint:
+        checkpoint = torch.load(checkpoint, map_location='cpu')
+        model.load_state_dict(checkpoint['model_state_dict'])
+    return model

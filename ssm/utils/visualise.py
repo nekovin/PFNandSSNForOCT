@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 import os 
 import sys
 sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm")
-from postprocessing.postprocessing import normalize_image
-from models.ssm_attention import SpatialAttention
+from ssm.postprocessing.postprocessing import normalize_image
+from ssm.models.ssm_attention import SpatialAttention
 
 def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch):
     """
