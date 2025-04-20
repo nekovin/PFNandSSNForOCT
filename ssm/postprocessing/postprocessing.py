@@ -3,6 +3,7 @@ import sys
 sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm")
 
 def normalize_image(np_img):
+    np_img = np_img.copy()
     if np_img.max() > 0:
         # Create mask of non-background pixels
         foreground_mask = np_img > 0.01

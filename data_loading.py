@@ -268,11 +268,11 @@ def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold
     except Exception as e:
         print(f"Error in preprocessing: {e}")
 
-def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
+def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
     
     dataset = {}
     try:
-        for i in range(1, n_patients+1):
+        for i in range(start, start+n_patients+1):
             data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
             preprocessed_data = standard_preprocessing(data)
             octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)
@@ -297,7 +297,7 @@ def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold
 
 
 class OCTDataset(Dataset):
-    def __init__(self, n_patients=2, n_images_per_patient=50, transform=None):
+    def __init__(self, start, n_patients=2, n_images_per_patient=50, transform=None):
         """
         Dataset class for OCT images
         
@@ -309,7 +309,7 @@ class OCTDataset(Dataset):
         self.transform = transform
         
         # Process OCT data
-        dataset_dict = preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2)
+        dataset_dict = preprocessing_v2(start, n_patients, n_images_per_patient, n_neighbours=2)
         
         # Store image pairs
         self.input_images = []
@@ -349,10 +349,10 @@ class OCTDataset(Dataset):
             
         return input_tensor, target_tensor
 
-def get_loaders(n_patients=2, n_images_per_patient=50, batch_size=8, 
+def get_loaders(start = 20, n_patients=2, n_images_per_patient=50, batch_size=8, 
                 val_split=0.2, shuffle=True, random_seed=42):
 
-    full_dataset = OCTDataset(n_patients=n_patients, n_images_per_patient=n_images_per_patient)
+    full_dataset = OCTDataset(start, n_patients=n_patients, n_images_per_patient=n_images_per_patient)
     
     dataset_size = len(full_dataset)
     val_size = int(val_split * dataset_size)

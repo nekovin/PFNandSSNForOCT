@@ -190,7 +190,9 @@ def train_speckle_separation_module_n2n(train_config, loss_fn, loss_name):
 
     n_patients = train_config['n_patients']
 
-    dataset = preprocessing_v2(n_patients, 50, n_neighbours = 10, threshold=65, sample=False, post_process_size=10)
+    start = train_config['start']
+
+    dataset = preprocessing_v2(start, n_patients, 50, n_neighbours = 10, threshold=65, sample=False, post_process_size=10)
 
     batch_size = train_config['batch_size']
     
