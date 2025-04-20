@@ -113,7 +113,6 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
 
 def train(dataloader, checkpoint, checkpoint_path, model, history, optimizer, set_epoch, num_epochs, loss_fn, loss_parameters, debug, n2v_weight, 
           fast, visualise): # dataset, num_epochs=50, batch_size=8, learning_rate=1e-4,device='cuda' if torch.cuda.is_available() else 'cpu',model=None,loss_parameters=None,load_model=False,debug=False,fast = False
-
     last_checkpoint = checkpoint_path.replace('.pth', f'_last.pth')
     best_checkpoint = checkpoint_path.replace('.pth', f'_best.pth')
     best_loss = checkpoint['best_loss'] if 'best_loss' in checkpoint else float('inf')
@@ -206,17 +205,17 @@ def train_speckle_separation_module_n2n(train_config, loss_fn, loss_name):
     learning_rate = train_config['learning_rate']
     num_epochs = train_config['num_epochs']
 
-    checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
+    base_checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
 
     if train_config['load_model']:
         try:
             print(train_config['checkpoint'])
-            custom_loss_trained_path = train_config['checkpoint'].format(loss_fn=loss_name)
+            custom_loss_trained_path = train_config['load_checkpoint'].format(loss_fn=loss_name)
             model = get_ssm_model(checkpoint=custom_loss_trained_path)
             print("Loading model from checkpoint...")
             #checkpoint_path = rf"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\{repr(model)}_best.pth"
             
-            checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
+            checkpoint_path = train_config['load_checkpoint'].format(loss_fn=loss_name)
             
             checkpoint = torch.load(checkpoint_path, map_location=device)
             model.load_state_dict(checkpoint['model_state_dict'])
@@ -254,7 +253,7 @@ def train_speckle_separation_module_n2n(train_config, loss_fn, loss_name):
     visualise = train_config['visualise']
     loss_parameters = train_config['loss_parameters']
 
-    train(dataloader, checkpoint, checkpoint_path, model, history, 
+    train(dataloader, checkpoint, base_checkpoint_path, model, history, 
           optimizer, set_epoch, num_epochs, 
           loss_fn, loss_parameters, debug, 
           n2v_weight, fast, visualise)

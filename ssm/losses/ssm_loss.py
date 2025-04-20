@@ -185,8 +185,13 @@ import matplotlib.pyplot as plt
 def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, loss_parameters, debug):
     mse = nn.MSELoss(reduction='none')
 
-    foreground_mask = (batch_targets > 0.01).float()
+    foreground_mask = (batch_targets > 0.03).float()
     background_mask = 1.0 - foreground_mask
+
+    plt.figure(figsize=(10, 5))
+    plt.imshow(foreground_mask[0, 0].cpu().numpy(), cmap='gray')
+    plt.title("Foreground Mask")
+    plt.show()
     
     # not very elegant just mse loss between masked flow and target
     pixel_wise_loss = mse(flow_component, batch_targets)

@@ -55,7 +55,7 @@ def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch)
     #normalise
     #axes[1, 0].imshow(flow_np, cmap='gray')
     #
-    axes[1, 0].imshow(flow_np, cmap='gray', vmin=0, vmax=1)
+    axes[1, 0].imshow(flow_np, cmap='gray')
     axes[1, 0].set_title("Flow Component")
     axes[1, 0].axis('off')
     
@@ -72,7 +72,7 @@ def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch)
     axes[1, 2].axis('off')
 
     flow_np = normalize_image(flow_np)
-    axes[0, 2].imshow(flow_np, cmap='gray', vmin=0, vmax=1)
+    axes[0, 2].imshow(flow_np, cmap='gray')
     axes[0, 2].set_title("Flow Component (Normalized)")
     axes[0, 2].axis('off')
 
