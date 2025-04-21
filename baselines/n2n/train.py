@@ -40,6 +40,8 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
         return epoch_loss
     
 def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha):
+    mode = 'train' if model.training else 'val'
+    
     epoch_loss = 0
     for batch_idx, (input_imgs, target_imgs) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
@@ -53,22 +55,22 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
             flow_outputs = flow_outputs['flow_component'].detach()
             flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
             
-            loss = criterion(outputs, target_imgs) + flow_loss * alpha # make alpha a hyperparameter
+            loss = criterion(outputs, target_imgs) + flow_loss * alpha
         else:
             outputs = model(input_imgs)
-            
-            loss = criterion(outputs, target_imgs) 
+            loss = criterion(outputs, target_imgs)
         
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        if mode == 'train':
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
         
         epoch_loss += loss.item()
         
         if (batch_idx + 1) % 10 == 0:
-            print(f"Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
+            print(f"{mode.capitalize()} Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
 
-        if visualise:
+        if visualise and batch_idx == 0:
             assert input_imgs[0][0].shape == (256, 256)
             assert target_imgs[0][0].shape == (256, 256)
             assert outputs[0][0].shape == (256, 256)
@@ -96,40 +98,57 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
                 losses = {
                     'Total Loss': loss.item()
                 }
+                
             plot_images(images, titles, losses)
 
-            if epoch == 1:
+            if epoch == 0 and mode == 'train' and speckle_module is not None:
                 plot_computation_graph(model, loss, speckle_module)
 
-    return epoch_loss
+    return epoch_loss / len(data_loader)
 
-def train(model, train_loader, val_loader, optimizer=None, criterion=None, epochs=100, batch_size=8, lr=0.001, save_dir='n2n/checkpoints',device='cuda', visualise=False, speckle_module=None, alpha=1):
-    os.makedirs(save_dir, exist_ok=True)
+def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, best_val_loss, checkpoint_path = None, save_dir='n2n/checkpoints',device='cuda', visualise=False, speckle_module=None, alpha=1):
     
+    os.makedirs(save_dir, exist_ok=True)
+
+    last_checkpoint_path = checkpoint_path + '_last_checkpoint.pth'
+    best_checkpoint_path = checkpoint_path + '_best_checkpoint.pth'
+
+    print(f"Saving checkpoints to {best_checkpoint_path}")
+
     start_time = time.time()
-    for epoch in range(epochs):
+    for epoch in range(starting_epoch, starting_epoch+epochs):
         model.train()
 
-        epoch_loss = process_batch(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+        train_loss = process_batch(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
         
-        avg_epoch_loss = epoch_loss / len(train_loader)
+        #avg_epoch_loss = epoch_loss / len(train_loader)
 
-        print(f"Epoch [{epoch+1}/{epochs}], Average Loss: {avg_epoch_loss:.6f}")
+        model.eval()
+        with torch.no_grad():
+            val_loss = process_batch(val_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+
+        print(f"Epoch [{epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
         
-        if (epoch + 1) % 5 == 0:
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            print(f"Saving best model with val loss: {val_loss:.6f}")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'loss': avg_epoch_loss
-            }, os.path.join(save_dir, f'n2n_model_epoch_{epoch+1}.pth'))
+                'train_loss': train_loss,
+                'val_loss': val_loss,
+                'best_val_loss': best_val_loss
+            }, best_checkpoint_path)
         
     torch.save({
-            'epoch': epoch,
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'loss': avg_epoch_loss
-        }, os.path.join(save_dir, f'n2n_model_last.pth'))
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': train_loss,
+                'val_loss': val_loss,
+                'best_val_loss': best_val_loss
+        }, last_checkpoint_path)
     
     elapsed_time = time.time() - start_time
     print(f"Training completed in {elapsed_time / 60:.2f} minutes")
@@ -145,28 +164,34 @@ def train_noise2noise(config):
     n_patients = train_config['n_patients']
     n_images_per_patient = train_config['n_images_per_patient']
     batch_size = train_config['batch_size']
+    start = train_config['start_patient'] if train_config['start_patient'] else 1
 
-    train_loader, val_loader = get_loaders(n_patients, n_images_per_patient, batch_size)
+    train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
 
-    checkpoint_path = train_config['checkpoint_path'] if train_config['checkpoint_path'] else None
+    if config['speckle_module']['use'] is True:
+        checkpoint_path = train_config['base_checkpoint_path_speckle']
+    else:
+        checkpoint_path = train_config['base_checkpoint_path'] if train_config['base_checkpoint_path'] else None
 
     save_dir = train_config['save_dir'] if train_config['save_dir'] else 'n2n/checkpoints'
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
 
     if train_config['model'] == 'UNet':
         model = UNet(in_channels=1, out_channels=1).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
-
     visualise = train_config['visualise']
+
+    alpha = 1
+    starting_epoch = 0
+    best_val_loss = float('inf')
 
     if config['speckle_module']['use'] is True:
         speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)
         try:
             print("Loading model from checkpoint...")
-            ssm_checkpoint_path = rf"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\{repr(speckle_module)}_best.pth"
+            ssm_checkpoint_path = rf"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\SpeckleSeparationUNetAttention_custom_loss_best.pth"
             ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
             speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
             speckle_module.to(device)
@@ -179,11 +204,14 @@ def train_noise2noise(config):
         speckle_module = None
 
     if train_config['load']:
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path + '_best_checkpoint.pth', map_location=device)
         print(checkpoint.keys())
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         print("Model loaded successfully")
+        print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['loss']}")
+        starting_epoch = checkpoint['epoch']
+        best_val_loss = checkpoint['val_loss']
 
     if train_config['train']:
 
@@ -193,9 +221,12 @@ def train_noise2noise(config):
             val_loader,
             optimizer=optimizer,
             criterion=train_config['criterion'],
+            starting_epoch=starting_epoch,
             epochs=train_config['epochs'], 
             batch_size=train_config['batch_size'], 
             lr=train_config['learning_rate'],
+            best_val_loss=best_val_loss,
+            checkpoint_path=checkpoint_path,
             save_dir=save_dir,
             device=device,
             visualise=visualise,

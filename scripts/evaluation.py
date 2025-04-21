@@ -216,7 +216,6 @@ def auto_select_roi(img, n_regions=3, min_size=100):
     Returns:
         List of masks for ROIs
     """
-    # Ensure image is in the right format
     if img.max() <= 1.0:
         img_8bit = (img * 255).astype(np.uint8)
     else:
@@ -243,6 +242,53 @@ def auto_select_roi(img, n_regions=3, min_size=100):
         masks.append(mask)
     
     return masks
+
+def calculate_cnr_whole(image):
+    """
+    Calculate CNR using a percentile-based approach that doesn't require manual ROI selection.
+    Works well for evaluating the whole image quality.
+    
+    Args:
+        image: Input image (2D numpy array)
+        
+    Returns:
+        cnr: Contrast-to-noise ratio
+    """
+    # Ensure image is normalized
+    if image.max() > 1.0:
+        image = image / image.max()
+    
+    # Use percentiles to identify signal and background regions
+    # Signal: top 10% brightest pixels
+    # Background: bottom 10% darkest pixels
+    signal_threshold = np.percentile(image, 90)
+    background_threshold = np.percentile(image, 10)
+    
+    signal_mask = image >= signal_threshold
+    background_mask = image <= background_threshold
+    
+    # Extract regions
+    signal_region = image[signal_mask]
+    background_region = image[background_mask]
+    
+    # Calculate statistics
+    signal_mean = np.mean(signal_region)
+    background_mean = np.mean(background_region)
+    signal_std = np.std(signal_region)
+    background_std = np.std(background_region)
+    
+    # Calculate CNR
+    # Avoid division by zero
+    denominator = np.sqrt(signal_std**2 + background_std**2)
+    if denominator == 0:
+        return 0
+    
+    cnr = abs(signal_mean - background_mean) / denominator
+    
+    # Convert to dB for consistency with other metrics
+    cnr_db = 20 * np.log10(cnr) if cnr > 0 else -np.inf
+    
+    return cnr_db
 
 def evaluate_oct_denoising(original, denoised, reference=None):
     """
@@ -275,6 +321,9 @@ def evaluate_oct_denoising(original, denoised, reference=None):
     if len(roi_masks) >= 2:
         metrics['cnr_original'] = calculate_cnr(original, roi_masks[0], roi_masks[1])
         metrics['cnr_denoised'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1])
+    else:
+        metrics['cnr_original'] = calculate_cnr_whole(original)
+        metrics['cnr_denoised'] = calculate_cnr_whole(denoised)
     
     if len(roi_masks) > 0:
         metrics['enl_original'] = calculate_enl(original, roi_masks[0])
