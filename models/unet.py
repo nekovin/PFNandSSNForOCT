@@ -51,6 +51,9 @@ class UNet(nn.Module):
         
         return self.final(final)
     
+    def __str__(self):
+        return "UNet"
+    
 def load_unet(config): # checkpoint_path = r'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\baselines\n2n\checkpoints\noise2noise_final.pth',device=None, load=False
     checkpoint_path = config['training']['checkpoint_path']
     load = config['training']['load']

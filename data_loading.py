@@ -295,7 +295,6 @@ def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbour
         print(f"Error in preprocessing: {e}")
 
 
-
 class OCTDataset(Dataset):
     def __init__(self, start, n_patients=2, n_images_per_patient=50, transform=None):
         """
