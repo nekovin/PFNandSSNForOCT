@@ -54,3 +54,6 @@ noise2void
 *.png
 
 .env
+
+*.npz
+*.json
