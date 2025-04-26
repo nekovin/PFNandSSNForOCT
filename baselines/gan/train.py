@@ -261,10 +261,7 @@ def train_nonlocal_gan(generator, discriminator, train_loader, num_epochs=100,
             d_loss = (d_loss_real + d_loss_fake) * 0.5
             d_loss.backward()
             optimizer_d.step()
-            
-            # -----------------
-            #  Train Generator
-            # -----------------
+
             optimizer_g.zero_grad()
             
             # Pass fake (denoised) images through discriminator for generator training
