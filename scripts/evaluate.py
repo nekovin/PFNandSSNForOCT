@@ -1,6 +1,7 @@
 import torch
 from dotenv import load_dotenv
 import os
+import pandas as pd
 
 from ssm.postprocessing.postprocessing import normalize_image
 from scripts.evaluation import evaluate_oct_denoising
@@ -52,5 +53,7 @@ def evaluate(image, model):
     #normalised_denoised = normalize_image(denoised)
     plot_sample(sample_image, denoised)
     metrics = evaluate_oct_denoising(sample_image, denoised)
-    print(metrics.keys())
-    print(metrics.values())
+    cols = metrics.keys()
+    val = metrics.values()
+
+    return metrics

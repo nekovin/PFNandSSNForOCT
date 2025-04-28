@@ -3,10 +3,10 @@ import time
 import os
 import torch
 import numpy as np
-from data_loading import get_loaders
+from scripts.data_loading import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
-from visualise import plot_images, plot_computation_graph
+from scripts.visualise import plot_images, plot_computation_graph
 from IPython.display import clear_output
 from baselines.n2v.utils import normalize_image_torch, load, visualise_n2v, plot_loss, enhanced_differentiable_threshold_octa_torch, compute_octa, create_blind_spot_input_with_realistic_noise
 
@@ -276,8 +276,8 @@ def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch,
     """
     os.makedirs(save_dir, exist_ok=True)
 
-    last_checkpoint_path = checkpoint_path + f'{model}_{method}_last_checkpoint.pth'
-    best_checkpoint_path = checkpoint_path + f'{model}_{method}_best_checkpoint.pth'
+    last_checkpoint_path = checkpoint_path + f'{model}_last_checkpoint.pth'
+    best_checkpoint_path = checkpoint_path + f'{model}_best_checkpoint.pth'
 
     print(f"Saving checkpoints to {best_checkpoint_path}")
 
@@ -391,9 +391,9 @@ def train_denoising(config):
 
     if train_config['load']:
         try:
-            checkpoint = torch.load(checkpoint_path + f'{model}_{method}_best_checkpoint.pth', map_location=device)
-            print(f"Loading {method} model from checkpoint...")
-            print(checkpoint_path + f'{model}_{method}_best_checkpoint.pth')
+            checkpoint = torch.load(checkpoint_path + f'{model}_best_checkpoint.pth', map_location=device)
+            print(f"Loading n2v model from checkpoint...")
+            print(checkpoint_path + f'{model}_best_checkpoint.pth')
             print(checkpoint.keys())
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

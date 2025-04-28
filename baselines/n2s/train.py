@@ -3,10 +3,10 @@ import time
 import os
 import torch
 import numpy as np
-from data_loading import get_loaders
+from scripts.data_loading import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
-from visualise import plot_images, plot_computation_graph
+from scripts.visualise import plot_images, plot_computation_graph
 
 def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
     """
@@ -169,7 +169,7 @@ def lognormal_consistency_loss(denoised, noisy, epsilon=1e-6):
     return loss
 
 def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
-          best_val_loss, checkpoint_path=None, save_dir='checkpoints', device='cuda', visualise=False, 
+          best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
           speckle_module=None, alpha=1, save=False, method='n2v'):
     """
     Train function that handles both Noise2Void and Noise2Self approaches.
@@ -177,10 +177,9 @@ def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch,
     Args:
         method (str): 'n2v' for Noise2Void or 'n2s' for Noise2Self
     """
-    os.makedirs(save_dir, exist_ok=True)
 
-    last_checkpoint_path = checkpoint_path + f'{model}_{method}_last_checkpoint.pth'
-    best_checkpoint_path = checkpoint_path + f'{model}_{method}_best_checkpoint.pth'
+    last_checkpoint_path = checkpoint_path + f'_last_checkpoint.pth'
+    best_checkpoint_path = checkpoint_path + f'_best_checkpoint.pth'
 
     print(f"Saving checkpoints to {best_checkpoint_path}")
 
@@ -234,17 +233,25 @@ def train_denoising(config):
     n_images_per_patient = train_config['n_images_per_patient']
     batch_size = train_config['batch_size']
     start = train_config['start_patient'] if train_config['start_patient'] else 1
-    method = train_config.get('method', 'n2v')  # Default to Noise2Void if not specified
+    method = train_config['method']
+    model = train_config['model']
 
     train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
+    
 
     if config['speckle_module']['use'] is True:
-        checkpoint_path = train_config['base_checkpoint_path_speckle']
+        #checkpoint_path = train_config['base_checkpoint_path_speckle']
+        #checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}_ssm_best_checkpoint.pth'
+        checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}_ssm'
     else:
-        checkpoint_path = train_config['base_checkpoint_path'] if train_config['base_checkpoint_path'] else None
+        #checkpoint_path = train_config['base_checkpoint_path'] if train_config['base_checkpoint_path'] else None
+        checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}'
+    
+    if not os.path.exists(train_config['baselines_checkpoint_path'] + f'{method}/checkpoints'):
+        os.makedirs(train_config['baselines_checkpoint_path'] + f'{method}/checkpoints')
 
-    save_dir = train_config['save_dir'] if train_config['save_dir'] else f'{method}/checkpoints'
-    save_dir.replace("n2n", method)
+    #save_dir = train_config['save_dir'] if train_config['save_dir'] else f'{method}/checkpoints'
+    #save_dir.replace("n2n", method)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -281,9 +288,9 @@ def train_denoising(config):
 
     if train_config['load']:
         try:
-            checkpoint = torch.load(checkpoint_path + f'{model}_{method}_best_checkpoint.pth', map_location=device)
+            checkpoint = torch.load(checkpoint_path + f'_best_checkpoint.pth', map_location=device)
             print(f"Loading {method} model from checkpoint...")
-            print(checkpoint_path + f'{model}_{method}_best_checkpoint.pth')
+            print(checkpoint_path + f'_best_checkpoint.pth')
             print(checkpoint.keys())
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -309,7 +316,6 @@ def train_denoising(config):
             lr=train_config['learning_rate'],
             best_val_loss=best_val_loss,
             checkpoint_path=checkpoint_path,
-            save_dir=save_dir,
             device=device,
             visualise=visualise,
             speckle_module=speckle_module,

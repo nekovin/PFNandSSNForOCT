@@ -2,10 +2,12 @@ import torch.optim as optim
 import time
 import os
 import torch
-from data_loading import get_loaders
+from scripts.data_loading import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
-from visualise import plot_images, plot_computation_graph
+from scripts.visualise import plot_images, plot_computation_graph
+from ssm.models.ssm_attention import SpeckleSeparationUNetAttention
+from ssm.postprocessing.postprocessing import normalize_image
 
 def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise): 
     """
@@ -139,12 +141,10 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
 
     return epoch_loss / len(data_loader)
 
-def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, best_val_loss, checkpoint_path = None, save_dir='n2n/checkpoints',device='cuda', visualise=False, speckle_module=None, alpha=1, save=False):
-    
-    os.makedirs(save_dir, exist_ok=True)
+def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, best_val_loss, checkpoint_path = None,device='cuda', visualise=False, speckle_module=None, alpha=1, save=False):
 
-    last_checkpoint_path = checkpoint_path + f'{model}_last_checkpoint.pth'
-    best_checkpoint_path = checkpoint_path + f'{model}_best_checkpoint.pth'
+    last_checkpoint_path = checkpoint_path + f'_last_checkpoint.pth'
+    best_checkpoint_path = checkpoint_path + f'_best_checkpoint.pth'
 
     print(f"Saving checkpoints to {best_checkpoint_path}")
 
@@ -190,8 +190,7 @@ def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch,
     
     return model
 
-from ssm.models.ssm_attention import SpeckleSeparationUNetAttention
-from ssm.postprocessing.postprocessing import normalize_image
+
 
 def train_noise2noise(config):
 
@@ -204,12 +203,21 @@ def train_noise2noise(config):
 
     train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
 
-    if config['speckle_module']['use'] is True:
-        checkpoint_path = train_config['base_checkpoint_path_speckle']
-    else:
-        checkpoint_path = train_config['base_checkpoint_path'] if train_config['base_checkpoint_path'] else None
+    method = train_config['method']
+    baselines_checkpoint_path = train_config['baselines_checkpoint_path']
+    checkpoint_path = baselines_checkpoint_path + rf"{method}/checkpoints/"
+    model = train_config['model']
 
-    save_dir = train_config['save_dir'] if train_config['save_dir'] else 'n2n/checkpoints'
+    if config['speckle_module']['use'] is True:
+        #checkpoint_path = train_config['base_checkpoint_path_speckle']
+        #C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\baselines\
+        checkpoint_path = checkpoint_path + rf"{model}_ssm"
+        
+    else:
+        #checkpoint_path = train_config['base_checkpoint_path'] if train_config['base_checkpoint_path'] else None
+        checkpoint_path = checkpoint_path + rf"{model}"
+
+    #save_dir = train_config['save_dir'] if train_config['save_dir'] else 'n2n/checkpoints'
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -244,9 +252,9 @@ def train_noise2noise(config):
         speckle_module = None
 
     if train_config['load']:
-        checkpoint = torch.load(checkpoint_path + f'{model}_best_checkpoint.pth', map_location=device)
+        checkpoint = torch.load(checkpoint_path + f'_best_checkpoint.pth', map_location=device)
         print("Loading model from checkpoint...")
-        print(checkpoint_path + f'{model}_best_checkpoint.pth')
+        print(checkpoint_path + f'_best_checkpoint.pth')
         print(checkpoint.keys())
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -269,7 +277,6 @@ def train_noise2noise(config):
             lr=train_config['learning_rate'],
             best_val_loss=best_val_loss,
             checkpoint_path=checkpoint_path,
-            save_dir=save_dir,
             device=device,
             visualise=visualise,
             speckle_module=speckle_module,
