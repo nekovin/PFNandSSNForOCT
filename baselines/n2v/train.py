@@ -329,17 +329,19 @@ def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch,
     
     return model
 
-def train_denoising(config):
+def train_n2v(config):
     """
     Main training function that can train with Noise2Void or Noise2Self.
     """
     train_config = config['training']
+    method = 'n2v'
+    model = train_config['model']
 
     n_patients = train_config['n_patients']
     n_images_per_patient = train_config['n_images_per_patient']
     batch_size = train_config['batch_size']
     start = train_config['start_patient'] if train_config['start_patient'] else 1
-    method = train_config.get('method', 'n2v')  # Default to Noise2Void if not specified
+    #method = train_config.get('method', 'n2v')  # Default to Noise2Void if not specified
 
     train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
 
@@ -347,11 +349,10 @@ def train_denoising(config):
     sample = next(iter(train_loader))
     assert len(sample) == 2
 
-
     if config['speckle_module']['use'] is True:
-        checkpoint_path = train_config['base_checkpoint_path_speckle']
+        checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}_ssm'
     else:
-        checkpoint_path = train_config['base_checkpoint_path'] if train_config['base_checkpoint_path'] else None
+        checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}'
 
     save_dir = train_config['save_dir'] if train_config['save_dir'] else f'{method}/checkpoints'
     save_dir.replace("n2n", method)

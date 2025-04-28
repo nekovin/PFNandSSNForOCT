@@ -192,9 +192,10 @@ def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch,
 
 
 
-def train_noise2noise(config):
+def train_n2n(config):
 
     train_config = config['training']
+    train_config['method'] = 'n2n'
 
     n_patients = train_config['n_patients']
     n_images_per_patient = train_config['n_images_per_patient']
@@ -209,8 +210,6 @@ def train_noise2noise(config):
     model = train_config['model']
 
     if config['speckle_module']['use'] is True:
-        #checkpoint_path = train_config['base_checkpoint_path_speckle']
-        #C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\baselines\
         checkpoint_path = checkpoint_path + rf"{model}_ssm"
         
     else:
@@ -252,16 +251,20 @@ def train_noise2noise(config):
         speckle_module = None
 
     if train_config['load']:
-        checkpoint = torch.load(checkpoint_path + f'_best_checkpoint.pth', map_location=device)
-        print("Loading model from checkpoint...")
-        print(checkpoint_path + f'_best_checkpoint.pth')
-        print(checkpoint.keys())
-        model.load_state_dict(checkpoint['model_state_dict'])
-        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        print("Model loaded successfully")
-        print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['best_val_loss']}")
-        starting_epoch = checkpoint['epoch']
-        best_val_loss = checkpoint['val_loss']
+        try:
+            checkpoint = torch.load(checkpoint_path + f'_best_checkpoint.pth', map_location=device)
+            print("Loading model from checkpoint...")
+            print(checkpoint_path + f'_best_checkpoint.pth')
+            print(checkpoint.keys())
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            print("Model loaded successfully")
+            print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['best_val_loss']}")
+            starting_epoch = checkpoint['epoch']
+            best_val_loss = checkpoint['val_loss']
+        except Exception as e:
+            print(f"Error loading model: {e}")
+            print("Starting training from scratch.")
 
     if train_config['train']:
 
@@ -282,9 +285,6 @@ def train_noise2noise(config):
             speckle_module=speckle_module,
             alpha=alpha,
             save=save)
-
-if __name__ == "__main__":
-    train_noise2noise()
 
 ###
 

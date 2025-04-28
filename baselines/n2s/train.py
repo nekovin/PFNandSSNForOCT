@@ -223,23 +223,25 @@ def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch,
     
     return model
 
-def train_denoising(config):
+def train_n2s(config):
+
     """
     Main training function that can train with Noise2Void or Noise2Self.
     """
     train_config = config['training']
+    method = "n2s"#train_config['method']
 
     n_patients = train_config['n_patients']
     n_images_per_patient = train_config['n_images_per_patient']
     batch_size = train_config['batch_size']
     start = train_config['start_patient'] if train_config['start_patient'] else 1
-    method = train_config['method']
+    
     model = train_config['model']
 
     train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
     
 
-    if config['speckle_module']['use'] is True:
+    if config['speckle_module']['use'] is True or use_speckle_module:
         #checkpoint_path = train_config['base_checkpoint_path_speckle']
         #checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}_ssm_best_checkpoint.pth'
         checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}_ssm'
