@@ -31,6 +31,7 @@ def plot_sample(image, denoised):
     ax[2].axis('off')
 
     plt.show()
+    
 
 def denoise_image(model, image, device):
     model.eval()
@@ -53,7 +54,5 @@ def evaluate(image, model):
     #normalised_denoised = normalize_image(denoised)
     plot_sample(sample_image, denoised)
     metrics = evaluate_oct_denoising(sample_image, denoised)
-    cols = metrics.keys()
-    val = metrics.values()
 
     return metrics

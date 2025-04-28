@@ -168,9 +168,9 @@ def lognormal_consistency_loss(denoised, noisy, epsilon=1e-6):
     loss = torch.abs(mu - expected_mu) + torch.abs(sigma - expected_sigma)
     return loss
 
-def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
+def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
-          speckle_module=None, alpha=1, save=False, method='n2v'):
+          speckle_module=None, alpha=1, save=False):
     """
     Train function that handles both Noise2Void and Noise2Self approaches.
     
@@ -223,7 +223,7 @@ def train(model, train_loader, val_loader, optimizer, criterion, starting_epoch,
     
     return model
 
-def train_n2s(config):
+def _train_n2s(config):
 
     """
     Main training function that can train with Noise2Void or Noise2Self.
