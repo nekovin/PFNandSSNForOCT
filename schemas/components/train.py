@@ -1,7 +1,7 @@
 from utils.data_loading import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
-from schemas.ssm.models.ssm_attention import SpeckleSeparationUNetAttention
+from models.ssm_attention import SpeckleSeparationUNetAttention
 import torch.optim as optim
 import torch
 from schemas.baselines.n2n import train_n2n

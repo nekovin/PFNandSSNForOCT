@@ -10,177 +10,14 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 
-# Set device
+from losses.content_loss import ContentLoss
+from models.gan import Generator, Discriminator
+
+from IPython.display import clear_output
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Using device: {device}")
 
-# Define the NonLocal Block
-class NonLocalBlock(nn.Module):
-    def __init__(self, in_channels, inter_channels=None):
-        super(NonLocalBlock, self).__init__()
-        
-        self.in_channels = in_channels
-        self.inter_channels = inter_channels
-        
-        if self.inter_channels is None:
-            self.inter_channels = in_channels // 2
-            if self.inter_channels == 0:
-                self.inter_channels = 1
-        
-        # Define transformations for query, key, and value
-        self.g = nn.Conv2d(in_channels, self.inter_channels, kernel_size=1, stride=1, padding=0)
-        self.theta = nn.Conv2d(in_channels, self.inter_channels, kernel_size=1, stride=1, padding=0)
-        self.phi = nn.Conv2d(in_channels, self.inter_channels, kernel_size=1, stride=1, padding=0)
-        
-        # Output transformation
-        self.W = nn.Conv2d(self.inter_channels, in_channels, kernel_size=1, stride=1, padding=0)
-        self.bn = nn.BatchNorm2d(in_channels)
-        
-    def forward(self, x):
-        batch_size = x.size(0)
-        
-        # g(x): [B, C, H, W] -> [B, C//2, H, W]
-        g_x = self.g(x).view(batch_size, self.inter_channels, -1)  # [B, C//2, H*W]
-        g_x = g_x.permute(0, 2, 1)  # [B, H*W, C//2]
-        
-        # theta(x): [B, C, H, W] -> [B, C//2, H, W]
-        theta_x = self.theta(x).view(batch_size, self.inter_channels, -1)  # [B, C//2, H*W]
-        theta_x = theta_x.permute(0, 2, 1)  # [B, H*W, C//2]
-        
-        # phi(x): [B, C, H, W] -> [B, C//2, H, W]
-        phi_x = self.phi(x).view(batch_size, self.inter_channels, -1)  # [B, C//2, H*W]
-        
-        # Calculate attention map
-        f = torch.matmul(theta_x, phi_x)  # [B, H*W, H*W]
-        f_div_C = F.softmax(f, dim=-1)
-        
-        # Weighted sum using the attention map
-        y = torch.matmul(f_div_C, g_x)  # [B, H*W, C//2]
-        y = y.permute(0, 2, 1).contiguous()  # [B, C//2, H*W]
-        y = y.view(batch_size, self.inter_channels, *x.size()[2:])  # [B, C//2, H, W]
-        
-        # Final transformation and residual connection
-        W_y = self.W(y)  # [B, C, H, W]
-        W_y = self.bn(W_y)  # Apply batch normalization
-        z = W_y + x  # Residual connection
-        
-        return z
-
-# Generator Network (with Nonlocal blocks)
-class Generator(nn.Module):
-    def __init__(self, in_channels=1, out_channels=1, features=64):
-        super(Generator, self).__init__()
-        
-        # Encoder
-        self.enc1 = nn.Sequential(
-            nn.Conv2d(in_channels, features, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, inplace=True)
-        )  # [B, 64, H/2, W/2]
-        
-        self.enc2 = nn.Sequential(
-            nn.Conv2d(features, features * 2, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features * 2),
-            nn.LeakyReLU(0.2, inplace=True)
-        )  # [B, 128, H/4, W/4]
-        
-        self.enc3 = nn.Sequential(
-            nn.Conv2d(features * 2, features * 4, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features * 4),
-            nn.LeakyReLU(0.2, inplace=True)
-        )  # [B, 256, H/8, W/8]
-        
-        self.enc4 = nn.Sequential(
-            nn.Conv2d(features * 4, features * 8, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features * 8),
-            nn.LeakyReLU(0.2, inplace=True)
-        )  # [B, 512, H/16, W/16]
-        
-        # NonLocal blocks
-        self.nonlocal1 = NonLocalBlock(features * 8)
-        self.nonlocal2 = NonLocalBlock(features * 4)
-        
-        # Decoder
-        self.dec1 = nn.Sequential(
-            nn.ConvTranspose2d(features * 8, features * 4, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features * 4),
-            nn.ReLU(inplace=True)
-        )  # [B, 256, H/8, W/8]
-        
-        self.dec2 = nn.Sequential(
-            nn.ConvTranspose2d(features * 8, features * 2, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features * 2),
-            nn.ReLU(inplace=True)
-        )  # [B, 128, H/4, W/4]
-        
-        self.dec3 = nn.Sequential(
-            nn.ConvTranspose2d(features * 4, features, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features),
-            nn.ReLU(inplace=True)
-        )  # [B, 64, H/2, W/2]
-        
-        self.dec4 = nn.Sequential(
-            nn.ConvTranspose2d(features * 2, out_channels, kernel_size=4, stride=2, padding=1),
-            nn.Tanh()  # Output range [-1, 1]
-        )  # [B, 1, H, W]
-        
-    def forward(self, x):
-        # Encoder
-        e1 = self.enc1(x)
-        e2 = self.enc2(e1)
-        e3 = self.enc3(e2)
-        e4 = self.enc4(e3)
-        
-        # Apply NonLocal block at bottleneck
-        e4 = self.nonlocal1(e4)
-        
-        # Decoder with skip connections
-        d1 = self.dec1(e4)
-        d1 = self.nonlocal2(d1)
-        d1 = torch.cat([d1, e3], dim=1)
-        
-        d2 = self.dec2(d1)
-        d2 = torch.cat([d2, e2], dim=1)
-        
-        d3 = self.dec3(d2)
-        d3 = torch.cat([d3, e1], dim=1)
-        
-        d4 = self.dec4(d3)
-        
-        return d4
-
-# PatchGAN Discriminator
-class Discriminator(nn.Module):
-    def __init__(self, in_channels=1, features=64):
-        super(Discriminator, self).__init__()
-        
-        self.model = nn.Sequential(
-            # Layer 1: No batch norm
-            nn.Conv2d(in_channels, features, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2, inplace=True),
-            
-            # Layer 2
-            nn.Conv2d(features, features * 2, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-            
-            # Layer 3
-            nn.Conv2d(features * 2, features * 4, kernel_size=4, stride=2, padding=1),
-            nn.BatchNorm2d(features * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-            
-            # Layer 4
-            nn.Conv2d(features * 4, features * 8, kernel_size=4, stride=1, padding=1),
-            nn.BatchNorm2d(features * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-            
-            # Output layer
-            nn.Conv2d(features * 8, 1, kernel_size=4, stride=1, padding=1)
-        )
-    
-    def forward(self, x):
-        return self.model(x)
-
-# OCT Dataset class
 class OCTDataset(Dataset):
     def __init__(self, root_dir, transform=None):
         self.root_dir = root_dir
@@ -197,24 +34,37 @@ class OCTDataset(Dataset):
         if self.transform:
             image = self.transform(image)
         
-        # For unsupervised training, return the same image as both input and target
         return image
 
-# Custom loss functions
-class ContentLoss(nn.Module):
-    def __init__(self):
-        super(ContentLoss, self).__init__()
-        self.l1 = nn.L1Loss()
-        
-    def forward(self, denoised, noisy):
-        return self.l1(denoised, noisy)
+from IPython.display import clear_output
+# import clear from PIL.Image
 
-# Training function
+
+def plot_images(images, titles, losses):
+    # clear output
+    clear_output(wait=True)
+    cols = len(images)
+    n_images = len(images)
+    rows = (n_images + cols - 1) // cols
+    fig, axes = plt.subplots(rows, cols, figsize=(15,5))
+    loss_titles = []
+    for loss_name, loss_value in losses.items():
+        loss_titles.append(f"{loss_name}: {loss_value:.4f}")
+    combined_title = " | ".join(loss_titles)
+    fig.suptitle(combined_title, fontsize=16)
+    for i, img in enumerate(images):
+        axes[i].imshow(img, cmap='gray')
+        axes[i].set_title(titles[i])
+        axes[i].axis('off')
+    plt.tight_layout()
+    plt.show()
+
+
 def train_nonlocal_gan(generator, discriminator, train_loader, num_epochs=100, 
                       lr_g=0.0002, lr_d=0.0002, save_path='models'):
     # Create directories for saving models and samples
     os.makedirs(save_path, exist_ok=True)
-    samples_dir = os.path.join(save_path, 'samples')
+    samples_dir = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\baselines\gan\checkpoints"#os.path.join(save_path, 'samples')
     os.makedirs(samples_dir, exist_ok=True)
     
     # Initialize optimizers
@@ -233,17 +83,94 @@ def train_nonlocal_gan(generator, discriminator, train_loader, num_epochs=100,
         running_loss_g = 0.0
         running_loss_d = 0.0
         
+        for batch_idx, (input_imgs, target_imgs) in enumerate(tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs}')):
+            noisy_images = input_imgs.to(device)
+            batch_size = noisy_images.size(0)
+            
+            real_labels = torch.ones(batch_size, 1, 30, 30).to(device)  # Size depends on your discriminator's output
+            fake_labels = torch.zeros(batch_size, 1, 30, 30).to(device)
+            
+            optimizer_d.zero_grad()
+            
+            real_outputs = discriminator(noisy_images)
+            d_loss_real = adversarial_loss(real_outputs, real_labels)
+            
+            # Generate denoised images
+            denoised_images = generator(noisy_images)
+            
+            # Pass fake (denoised) images through discriminator
+            fake_outputs = discriminator(denoised_images.detach())
+            d_loss_fake = adversarial_loss(fake_outputs, fake_labels)
+            
+            # Total discriminator loss
+            d_loss = (d_loss_real + d_loss_fake) * 0.5
+            d_loss.backward()
+            optimizer_d.step()
+            
+            optimizer_g.zero_grad()
+            
+            # Pass fake (denoised) images through discriminator for generator training
+            fake_outputs = discriminator(denoised_images)
+            g_loss_adv = adversarial_loss(fake_outputs, real_labels)
+            
+            g_loss_content = content_loss(denoised_images, noisy_images) * 10.0 
+            
+            g_loss = g_loss_adv + g_loss_content
+            g_loss.backward()
+            optimizer_g.step()
+            
+            running_loss_g += g_loss.item()
+            running_loss_d += d_loss.item()
+
+            plot_images([noisy_images[0][0].cpu().detach().numpy(), denoised_images[0][0].cpu().detach().numpy()],
+                       titles=['Noisy', 'Denoised', 'Target'],
+                       losses={'D Loss': d_loss.item(), 'G Loss': g_loss.item()})
+        
+        avg_loss_g = running_loss_g / len(train_loader)
+        avg_loss_d = running_loss_d / len(train_loader)
+        print(f'Epoch {epoch+1}/{num_epochs} - D Loss: {avg_loss_d:.4f}, G Loss: {avg_loss_g:.4f}')
+
+        if (epoch + 1) % 10 == 0:
+            torch.save({
+                'generator_state_dict': generator.state_dict(),
+                'discriminator_state_dict': discriminator.state_dict(),
+                'optimizer_g_state_dict': optimizer_g.state_dict(),
+                'optimizer_d_state_dict': optimizer_d.state_dict(),
+                'epoch': epoch,
+            }, os.path.join(save_path, f'nonlocal_gan_epoch_{epoch+1}.pth'))
+
+
+
+def train_nonlocal_gan(generator, discriminator, train_loader, num_epochs=100, 
+                      lr_g=0.0002, lr_d=0.0002, save_path=r'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints'):
+    os.makedirs(save_path, exist_ok=True)
+    #samples_dir = os.path.join(save_path, 'samples')
+    #os.makedirs(samples_dir, exist_ok=True)
+
+    last_checkpoint_path = os.path.join(save_path, f'nonlocal_gan_epoch_last.pth')
+    
+    # Initialize optimizers
+    optimizer_g = optim.Adam(generator.parameters(), lr=lr_g, betas=(0.5, 0.999))
+    optimizer_d = optim.Adam(discriminator.parameters(), lr=lr_d, betas=(0.5, 0.999))
+
+    adversarial_loss = nn.BCEWithLogitsLoss()
+    content_loss = ContentLoss()
+    
+    for epoch in range(num_epochs):
+        generator.train()
+        discriminator.train()
+        
+        running_loss_g = 0.0
+        running_loss_d = 0.0
+        
         for i, noisy_images in enumerate(tqdm(train_loader, desc=f'Epoch {epoch+1}/{num_epochs}')):
+            noisy_images = noisy_images[0]
             noisy_images = noisy_images.to(device)
             batch_size = noisy_images.size(0)
             
-            # Ground truth labels for discriminator
-            real_labels = torch.ones(batch_size, 1, 16, 16).to(device)  # Size depends on your discriminator's output
-            fake_labels = torch.zeros(batch_size, 1, 16, 16).to(device)
+            real_labels = torch.ones(batch_size, 1, 30, 30).to(device)  # Size depends on your discriminator's output
+            fake_labels = torch.zeros(batch_size, 1, 30, 30).to(device)
             
-            # ---------------------
-            #  Train Discriminator
-            # ---------------------
             optimizer_d.zero_grad()
             
             # Pass real images through discriminator
@@ -280,7 +207,6 @@ def train_nonlocal_gan(generator, discriminator, train_loader, num_epochs=100,
             running_loss_g += g_loss.item()
             running_loss_d += d_loss.item()
             
-            # Save samples every 100 iterations
             if i % 100 == 0:
                 with torch.no_grad():
                     generator.eval()
@@ -301,16 +227,18 @@ def train_nonlocal_gan(generator, discriminator, train_loader, num_epochs=100,
                         axes[1, j].axis('off')
                     
                     plt.tight_layout()
-                    plt.savefig(os.path.join(samples_dir, f'epoch_{epoch+1}_iter_{i}.png'))
+                    #plt.savefig(os.path.join(samples_dir, f'epoch_{epoch+1}_iter_{i}.png'))
                     plt.close()
                     generator.train()
         
         # Print epoch summary
         avg_loss_g = running_loss_g / len(train_loader)
         avg_loss_d = running_loss_d / len(train_loader)
+
+        clear_output(wait=True)
         print(f'Epoch {epoch+1}/{num_epochs} - D Loss: {avg_loss_d:.4f}, G Loss: {avg_loss_g:.4f}')
         
-        # Save models every 10 epochs
+
         if (epoch + 1) % 10 == 0:
             torch.save({
                 'generator_state_dict': generator.state_dict(),
@@ -318,7 +246,7 @@ def train_nonlocal_gan(generator, discriminator, train_loader, num_epochs=100,
                 'optimizer_g_state_dict': optimizer_g.state_dict(),
                 'optimizer_d_state_dict': optimizer_d.state_dict(),
                 'epoch': epoch,
-            }, os.path.join(save_path, f'nonlocal_gan_epoch_{epoch+1}.pth'))
+            }, last_checkpoint_path)
 
 # Evaluation function
 def evaluate_model(generator, test_loader, save_dir='results'):
@@ -349,7 +277,6 @@ def evaluate_model(generator, test_loader, save_dir='results'):
                     plt.savefig(os.path.join(save_dir, f'test_sample_{i}_{j}.png'))
                     plt.close()
 
-# Main function to set up and run the training
 def main():
     # Hyperparameters
     batch_size = 8
@@ -386,7 +313,6 @@ def main():
     # Evaluate the model
     evaluate_model(generator, test_loader)
 
-# Function to calculate quantitative metrics
 def calculate_metrics(original_images, denoised_images):
     """
     Calculate PSNR, SNR, CNR and ENL metrics
@@ -472,6 +398,21 @@ def calculate_metrics(original_images, denoised_images):
     
     return metrics
 
-# Usage example
+def load_model(generator, discriminator, optimizer_g, optimizer_d, checkpoint_path):
+    """
+    Load model and optimizer state from checkpoint
+    """
+    checkpoint = torch.load(checkpoint_path)
+    
+    generator.load_state_dict(checkpoint['generator_state_dict'])
+    discriminator.load_state_dict(checkpoint['discriminator_state_dict'])
+    
+    optimizer_g.load_state_dict(checkpoint['optimizer_g_state_dict'])
+    optimizer_d.load_state_dict(checkpoint['optimizer_d_state_dict'])
+    
+    epoch = checkpoint['epoch']
+    return epoch
+
 if __name__ == "__main__":
     main()
+
