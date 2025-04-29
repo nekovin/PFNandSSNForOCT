@@ -300,3 +300,28 @@ def save_batch(epoch, batch_idx, input_images, output_images, target_images, dat
         outputs=output_images,
         targets=target_images
     )
+
+def main():
+    #from schemas.proposed.pfn import trainer
+    from models.ProgressiveFusionUNET_V2 import create_progressive_fusion_unet
+    import torch
+    from utils.pfn_data import get_dataset
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    levels = 6
+    img_size = 256
+
+    model = create_progressive_fusion_unet(n_fusion_levels=levels)
+    train_loader, val_loader, test_loader = get_dataset(basedir=r"C:\Datasets\OCTData\data\FusedDataset", size=img_size, levels=levels) #6,1,w,h # [0] is the images
+
+    pfn_trainer = trainer(
+        model=model,
+        train_loader=train_loader,
+        val_loader=val_loader,
+        learning_rate=1e-3,
+        checkpoint_dir=rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints',
+        img_size=img_size,
+    )
+
+    pfn_trainer.train(num_epochs=10)
