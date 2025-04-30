@@ -89,9 +89,9 @@ class trainer:
         
         self.history = {'train_loss': [], 'val_loss': []}
 
-    def train(self, num_epochs, load=True):
-        last_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\phf_last"
-        best_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\phf_best"
+    def train(self, num_epochs, load=False):
+        last_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\phf_last.pth"
+        best_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\phf_best.pth"
         if load:
             checkpoint = torch.load(last_checkpoint_path)
             self.model.load_state_dict(checkpoint['model_state_dict'])
@@ -114,8 +114,9 @@ class trainer:
             
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                save_checkpoint(epoch, val_loss, self.model, self.optimizer, self.checkpoint_dir, self.img_size)
+                save_checkpoint(epoch, val_loss, self.model, self.optimizer, r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\phf_best.pth", self.img_size)
             
+            save_checkpoint(epoch, val_loss, self.model, self.optimizer, r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\phf_last.pth", self.img_size)
             print(f'Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}')
             plot_losses(self.history, self.vis_dir)
 
@@ -199,7 +200,7 @@ def save_checkpoint(epoch, val_loss, model, optimizer, checkpoint_dir, img_size)
             'optimizer_state_dict': optimizer.state_dict(),
             'val_loss': val_loss,
         }
-        torch.save(checkpoint, r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\phf_last")
+        torch.save(checkpoint, checkpoint_dir)
 
 def normalize_to_target(input_img, target_img):
     target_mean = target_img.mean()
@@ -303,7 +304,7 @@ def save_batch(epoch, batch_idx, input_images, output_images, target_images, dat
 
 def main():
     #from schemas.proposed.pfn import trainer
-    from models.ProgressiveFusionUNET_V2 import create_progressive_fusion_unet
+    from models.prog import create_progressive_fusion_dynamic_unet
     import torch
     from utils.pfn_data import get_dataset
 
@@ -312,7 +313,7 @@ def main():
     levels = 6
     img_size = 256
 
-    model = create_progressive_fusion_unet(n_fusion_levels=levels)
+    model = create_progressive_fusion_dynamic_unet()
     train_loader, val_loader, test_loader = get_dataset(basedir=r"C:\Datasets\OCTData\data\FusedDataset", size=img_size, levels=levels) #6,1,w,h # [0] is the images
 
     pfn_trainer = trainer(
