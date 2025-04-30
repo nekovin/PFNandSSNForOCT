@@ -274,25 +274,24 @@ def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbour
     try:
         for i in range(start, start+n_patients):
             data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
+            assert len(data) > 0, f"No data found for patient {i}"
             preprocessed_data = standard_preprocessing(data)
             octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)
             
-            # Clean the OCTA data
             cleaned_octa_data = []
             for octa_img in octa_data:
                 cleaned_img = remove_speckle_noise(octa_img, min_size=post_process_size)
                 cleaned_octa_data.append(cleaned_img)
             
-            # Pair the data correctly, accounting for the offset
             input_target_data = pair_data(preprocessed_data, cleaned_octa_data, n_images_per_patient)
             
-            # Store without arbitrary slicing, or use a slicing that's related to n_neighbours
             dataset[i] = input_target_data
             
         return dataset
     
     except Exception as e:
         print(f"Error in preprocessing: {e}")
+        return None
 
 
 class OCTDataset(Dataset):
@@ -314,7 +313,6 @@ class OCTDataset(Dataset):
         self.input_images = []
         self.target_images = []
         
-        # Create pairs of consecutive scans
         for patient_id, data in dataset_dict.items():
             for i in range(len(data) - 1):  # Use consecutive pairs
                 input_image = data[i][0]  # First scan as input

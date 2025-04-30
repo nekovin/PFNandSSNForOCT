@@ -6,7 +6,7 @@ import torch
 import os
 import time
 import matplotlib.pyplot as plt
-from scripts.data_loading import preprocessing_v2
+from utils.data_loading import preprocessing_v2
 
 def calculate_psnr(img1, img2, max_value=1.0):
     """
@@ -469,3 +469,8 @@ def validate_model(model, n_patients=5, n_images_per_patient=10, device=None, sa
         print(f"Validation results saved to {results_dir}")
     
     return avg_metrics
+
+def display_metrics(metrics):
+    import pandas as pd
+    df = pd.DataFrame(metrics)
+    return df

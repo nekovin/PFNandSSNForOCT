@@ -1,5 +1,5 @@
-from scripts.utils import get_config
-from scripts.evaluate import evaluate
+from utils.config import get_config
+from utils.evaluate import evaluate
 import torch
 from models.unet_2 import UNet2
 
@@ -10,9 +10,9 @@ def load_model(config):
     method = eval_config['method']
     model = eval_config['model']
     if use_speckle:
-        checkpoint_path = base_checkpoint_path + rf"{method}/checkpoints/{model}_ssm_best_checkpoint.pth"
+        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
     else:
-        checkpoint_path = base_checkpoint_path + rf"{method}/checkpoints/{model}_best_checkpoint.pth"
+        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
     
     device = eval_config['device']
     if model == "UNet2":

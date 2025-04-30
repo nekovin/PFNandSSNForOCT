@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 import pandas as pd
 
-from ssm.postprocessing.postprocessing import normalize_image
+from utils.postprocessing import normalize_image
 from utils.metrics import evaluate_oct_denoising
 
 def get_sample_image(dataloader, device):
