@@ -2,6 +2,7 @@
 import time
 import torch
 from utils.visualise import plot_images
+from tqdm import tqdm
 
 def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise): 
     """
@@ -9,7 +10,7 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
     WITHOUT speckle module.
     """
     epoch_loss = 0
-    for batch_idx, (input_imgs, target_imgs) in enumerate(data_loader):
+    for batch_idx, (input_imgs, target_imgs) in tqdm(enumerate(data_loader)):
         input_imgs = input_imgs.to(device)
         target_imgs = target_imgs.to(device)
         

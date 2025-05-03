@@ -25,7 +25,7 @@ def normalize_image(np_img):
     np_img[np_img < 0.01] = 0
     return np_img
 
-def load_patient_data(base_path):
+def load_patient_data(base_path, verbose=False):
     """
     Load OCT B-scans for a patient from the specified path.
     
@@ -35,7 +35,8 @@ def load_patient_data(base_path):
     Returns:
         List of loaded OCT scans as normalized numpy arrays
     """
-    print(f"Loading data from: {base_path}")
+    if verbose:
+        print(f"Loading data from: {base_path}")
     
     # Find all TIFF files in the directory
     files = sorted(glob.glob(os.path.join(base_path, "*.tiff")))
@@ -46,8 +47,9 @@ def load_patient_data(base_path):
         files = sorted(glob.glob(os.path.join(base_path, "*.png")))
     if not files:
         files = sorted(glob.glob(os.path.join(base_path, "*.jpg")))
-        
-    print(f"Found {len(files)} files")
+    
+    if verbose:
+        print(f"Found {len(files)} files")
     
     # Load and preprocess images
     oct_scans = []

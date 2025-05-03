@@ -28,13 +28,19 @@ https://github.com/czbiohub-sf/noise2self
 classification/
 https://github.com/Sudhandar/ResNet-50-model
 
+## Background
+
 ## Training
 
+Before training, configure the config.yaml files with training content.
+
+```
 py trainers/n2n_trainer.py
 py trainers/n2s_trainer.py
 py trainers/n2v_trainer.py
 py trainers/pfn_trainer.py
 py trainers/ssm_trainer.py
+```
 
 ## Evaluation
 

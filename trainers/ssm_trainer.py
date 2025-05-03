@@ -347,7 +347,7 @@ def train_speckle_separation_module_n2n(train_config, loss_fn, loss_name):
           loss_fn, loss_parameters, debug, 
           n2v_weight, fast, visualise)
     
-def main():
+def train_ssm():
 
 
     config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\ssm_config.yaml"
@@ -381,3 +381,5 @@ def main():
     #graph = make_dot(both_outputs, params=dict(model.named_parameters()))
     #graph.render("ssm_model", format="png")
 
+if __name__ == "__main__":
+    train_ssm()

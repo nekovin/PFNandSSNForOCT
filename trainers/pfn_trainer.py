@@ -189,7 +189,7 @@ class Trainer:
         
         return sum(val_losses) / len(val_losses)
 
-def main():
+def train_pfn():
     model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
 
     load = True
@@ -213,4 +213,4 @@ def main():
         json.dump(history, f) # Save the training history to a JSON file
 
 if __name__ == "__main__":
-    main()
+    train_pfn()

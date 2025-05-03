@@ -305,29 +305,32 @@ def evaluate_oct_denoising(original, denoised, reference=None):
     metrics = {}
     
     # Calculate reference-based metrics if available
-    if reference is not None:
-        metrics['psnr'] = calculate_psnr(denoised, reference)
-        metrics['ssim'] = calculate_ssim(denoised, reference)
+    #if reference is not None:
+        #metrics['psnr'] = calculate_psnr(denoised, reference)
+        #metrics['ssim'] = calculate_ssim(denoised, reference)
     
     # Self-reference metrics comparing original to denoised
-    metrics['psnr_self'] = calculate_psnr(denoised, original)
-    metrics['ssim_self'] = calculate_ssim(denoised, original)
+    metrics['psnr'] = calculate_psnr(denoised, original)
+    metrics['ssim'] = calculate_ssim(denoised, original)
     
-    # Calculate noise reduction metrics
-    metrics['snr_original'] = calculate_snr(original)
-    metrics['snr_denoised'] = calculate_snr(denoised)
+    #metrics['snr_original'] = calculate_snr(original)
+    #metrics['snr_denoised'] = calculate_snr(denoised)
+    metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     
     roi_masks = auto_select_roi(denoised)
     if len(roi_masks) >= 2:
-        metrics['cnr_original'] = calculate_cnr(original, roi_masks[0], roi_masks[1])
-        metrics['cnr_denoised'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1])
+        #metrics['cnr_original'] = calculate_cnr(original, roi_masks[0], roi_masks[1])
+        #metrics['cnr_denoised'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1])
+        metrics['cnr'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1]) - calculate_cnr(original, roi_masks[0], roi_masks[1])
     else:
-        metrics['cnr_original'] = calculate_cnr_whole(original)
-        metrics['cnr_denoised'] = calculate_cnr_whole(denoised)
+        #metrics['cnr_original'] = calculate_cnr_whole(original)
+        #metrics['cnr_denoised'] = calculate_cnr_whole(denoised)
+        metrics['cnr'] = calculate_cnr_whole(denoised) - calculate_cnr_whole(original)
     
     if len(roi_masks) > 0:
-        metrics['enl_original'] = calculate_enl(original, roi_masks[0])
-        metrics['enl_denoised'] = calculate_enl(denoised, roi_masks[0])
+        #metrics['enl_original'] = calculate_enl(original, roi_masks[0])
+        #metrics['enl_denoised'] = calculate_enl(denoised, roi_masks[0])
+        metrics['enl'] = calculate_enl(denoised, roi_masks[0]) - calculate_enl(original, roi_masks[0])
     
     metrics['epi'] = calculate_epi(original, denoised)
     
@@ -470,7 +473,14 @@ def validate_model(model, n_patients=5, n_images_per_patient=10, device=None, sa
     
     return avg_metrics
 
+from IPython.display import display
+
 def display_metrics(metrics):
     import pandas as pd
     df = pd.DataFrame(metrics)
+    def highlight_max(s):
+        is_max = s == s.max()
+        return ['font-weight: bold' if v else '' for v in is_max]
+    styled_df = df.style.apply(highlight_max, axis=1)
+    display(styled_df)
     return df

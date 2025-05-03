@@ -1,13 +1,15 @@
 from schemas.components.train import train
 from utils.config import get_config
 
-def main():
+def train_n2n(config_path=None):
     
-    config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"
-
+    if config_path is None:
+        # Default path to the configuration file
+        config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"
+        
     config = get_config(config_path)
 
     train(config, "n2n", False)
 
 if __name__ == "__main__":
-    main()
+    train_n2n()
