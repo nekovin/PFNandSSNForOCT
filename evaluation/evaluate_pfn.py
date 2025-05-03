@@ -21,7 +21,7 @@ def evaluate_progressssive_fusion_unet(image, device):
 
     temp_checkpoint_path = eval_config['temp_checkpoint_path']
 
-    model = create_progressive_fusion_dynamic_unet(n_fusion_levels=6).to(device)
+    model = create_progressive_fusion_dynamic_unet().to(device)
     checkpoint = torch.load(temp_checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()

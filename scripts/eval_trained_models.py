@@ -6,8 +6,13 @@ from utils.metrics import display_metrics
 from evaluation.evaluate_pfn import evaluate_progressssive_fusion_unet
 from evaluation.evaluate_n2_baselines import evaluate_n2
 
+# import rando
+import random
+
 def main():
-    train_loader, val_loader = get_loaders(15, 1, 50, 8)
+    random.seed(42)
+    random_number = random.randint(2, 20)
+    train_loader, val_loader = get_loaders(random_number, 1, 50, 8)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

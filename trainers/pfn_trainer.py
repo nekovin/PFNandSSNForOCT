@@ -12,7 +12,7 @@ import json
 from models.prog import create_progressive_fusion_dynamic_unet
 from utils.pfn_data import get_dataset
 
-def save_checkpoint(epoch, val_loss, model, optimizer, checkpoint_dir, img_size):
+def save_checkpoint(epoch, val_loss, model, optimizer, checkpoint_path, img_size):
         """Save model checkpoint"""
         checkpoint = {
             'epoch': epoch,
@@ -20,7 +20,7 @@ def save_checkpoint(epoch, val_loss, model, optimizer, checkpoint_dir, img_size)
             'optimizer_state_dict': optimizer.state_dict(),
             'val_loss': val_loss,
         }
-        torch.save(checkpoint, checkpoint_dir / f'{img_size}_checkpoint_epoch_{epoch}.pt')
+        torch.save(checkpoint, checkpoint_path)
 
 def normalize_to_target(input_img, target_img):
     target_mean = target_img.mean()
@@ -82,7 +82,7 @@ class Trainer:
         val_loader,
         learning_rate=1e-4,
         device='cuda' if torch.cuda.is_available() else 'cpu',
-        checkpoint_dir=f'checkpoints',
+        checkpoint_dir=rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints',
         img_size=300,
     ):
         self.model = model.to(device)
@@ -93,7 +93,7 @@ class Trainer:
         self.checkpoint_dir.mkdir(exist_ok=True)
         self.img_size = img_size
 
-        self.vis_dir = Path('visualizations')
+        self.vis_dir = Path('../visualizations')
         self.vis_dir.mkdir(exist_ok=True)
         
         self.optimizer = Adam(model.parameters(), lr=learning_rate)
@@ -106,6 +106,8 @@ class Trainer:
 
     def train(self, num_epochs):
         best_val_loss = float('inf')
+        best_checkpoint_path = self.checkpoint_dir / f'{self.img_size}_best_checkpoint.pth'
+        last_checkpoint_path = self.checkpoint_dir / f'{self.img_size}_last_checkpoint.pth'
         
         for epoch in range(num_epochs):
             train_loss = self.train_epoch(epoch)
@@ -118,7 +120,8 @@ class Trainer:
             
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                save_checkpoint(epoch, val_loss, self.model, self.optimizer, self.checkpoint_dir, self.img_size)
+                save_checkpoint(epoch, val_loss, self.model, self.optimizer, best_checkpoint_path, self.img_size)
+            save_checkpoint(epoch, val_loss, self.model, self.optimizer, last_checkpoint_path, self.img_size)
             
             print(f'Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}')
             #plot_losses(self.history, self.vis_dir)
@@ -182,12 +185,21 @@ class Trainer:
                 
                 val_losses.append(batch_loss.item())
 
-                visualize_batch(0, 0, input_img, outputs, target_images, self.vis_dir)
+                #visualize_batch(0, 0, input_img, outputs, target_images, self.vis_dir)
         
         return sum(val_losses) / len(val_losses)
 
 def main():
     model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
+
+    load = True
+    if load:
+        checkpoint_path = rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\300_best_checkpoint.pth'
+        checkpoint = torch.load(checkpoint_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print("Model loaded successfully.")
+    else:
+        print("Model not loaded.")
 
     levels = None
     img_size = 300

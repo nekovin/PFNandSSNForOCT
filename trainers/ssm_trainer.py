@@ -7,16 +7,24 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from losses.ssm_loss import custom_loss
-from utils.visualise_ssm import visualize_progress
+
+
 import torch
-from utils.visualise_ssm import visualize_attention_maps
-from utils.masking import subset_blind_spot_masking
+
 from models.ssm_attention import get_ssm_model
 from losses.ssm_loss import custom_loss
-from utils.data_loading import preprocessing_v2
+
 import numpy as np
 from torch.utils.data import random_split
+
+from utils.data_loading import preprocessing_v2
+from utils.visualise_ssm import visualize_progress
+from utils.visualise_ssm import visualize_attention_maps
+from utils.masking import subset_blind_spot_masking
+
+#from ssm.train.train import train_speckle_separation_module_n2n
+#from ssm.losses.ssm_loss import custom_loss
+from utils.config import get_config
 
 def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):
     running_loss = 0.0
@@ -340,9 +348,7 @@ def train_speckle_separation_module_n2n(train_config, loss_fn, loss_name):
           n2v_weight, fast, visualise)
     
 def main():
-    #from ssm.train.train import train_speckle_separation_module_n2n
-    #from ssm.losses.ssm_loss import custom_loss
-    from utils import get_config
+
 
     config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\ssm_config.yaml"
 

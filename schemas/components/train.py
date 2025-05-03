@@ -53,7 +53,7 @@ def train(config, method, ssm):
     if config['speckle_module']['use'] is True or ssm:
         speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)
         try:
-            print("Loading model from checkpoint...")
+            print("Loading ssm model from checkpoint...")
             ssm_checkpoint_path = rf"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\SpeckleSeparationUNetAttention_custom_loss_best.pth"
             ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
             speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
