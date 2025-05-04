@@ -23,6 +23,9 @@ def main():
     start = random.randint(30, 35)
     train_loader, val_loader = get_loaders(start, 1, 50, 8)
 
+    print("Loading data...")
+    print("Patient ID: ", start)
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     image = get_sample_image(val_loader, device)

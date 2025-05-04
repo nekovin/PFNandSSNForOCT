@@ -82,10 +82,13 @@ def calculate_snr(img, background_mask=None):
     noise_std = np.std(noise)
     
     if noise_std == 0:
-        return float('inf')
+        print("Noise standard deviation is zero, SNR cannot be calculated.")
+        return np.nan
     
     epsilon = 1e-10  # Small value to avoid log(0)
-    return 20 * np.log10(signal_mean / noise_std) + epsilon
+    #return 20 * np.log10(signal_mean / noise_std + epsilon)
+    ratio = abs(signal_mean) / noise_std
+    return 20 * np.log10(ratio + epsilon)
 
 def calculate_cnr(img, foreground_mask=None, background_mask=None):
     """
