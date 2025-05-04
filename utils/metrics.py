@@ -84,7 +84,8 @@ def calculate_snr(img, background_mask=None):
     if noise_std == 0:
         return float('inf')
     
-    return 20 * np.log10(signal_mean / noise_std)
+    epsilon = 1e-10  # Small value to avoid log(0)
+    return 20 * np.log10(signal_mean / noise_std) + epsilon
 
 def calculate_cnr(img, foreground_mask=None, background_mask=None):
     """
@@ -314,6 +315,8 @@ def evaluate_oct_denoising(original, denoised, reference=None):
     
     #metrics['snr_original'] = calculate_snr(original)
     #metrics['snr_denoised'] = calculate_snr(denoised)
+    print("SNR Original: ", calculate_snr(original))
+    print("SNR Denoised: ", calculate_snr(denoised))
     metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     
     roi_masks = auto_select_roi(denoised)
