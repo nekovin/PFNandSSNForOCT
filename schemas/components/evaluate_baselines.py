@@ -2,8 +2,9 @@ from utils.config import get_config
 from utils.evaluate import evaluate
 import torch
 from models.unet_2 import UNet2
+from models.unet import UNet
 
-def load_model(config, verbose=False):
+def load_checkpoint(config):
     use_speckle = config['speckle_module']['use']
     eval_config = config['eval']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
@@ -18,7 +19,27 @@ def load_model(config, verbose=False):
     if model == "UNet2":
         model = UNet2(in_channels=1, out_channels=1).to(device)
 
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+
+    return checkpoint
+
+def load_model(config, verbose=False):
+    use_speckle = config['speckle_module']['use']
+    eval_config = config['eval']
+    base_checkpoint_path = eval_config['baselines_checkpoint_path']
+    method = eval_config['method']
+    model = eval_config['model']
+    if use_speckle:
+        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
+    else:
+        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
     
+    device = eval_config['device']
+    
+    if model == "UNet":
+        model = UNet(in_channels=1, out_channels=1).to(device)
+    if model == "UNet2":
+        model = UNet2(in_channels=1, out_channels=1).to(device)
 
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -44,8 +65,16 @@ def evaluate_baseline(image, method, config_path = r"C:\Users\CL-11\OneDrive\Rep
     verbose = config['eval']['verbose']
 
     model = load_model(config, verbose)
+    checkpoint = load_checkpoint(config)
 
-    return evaluate(image, model, method)
+    metrics, denoised = evaluate(image, model, method)
+
+    metrics['epochs'] = checkpoint['epoch']
+    metrics['loss'] = checkpoint['best_val_loss']
+    #metrics['model'] = str(model.__class__.__name__)
+    metrics['model'] = str(model)
+
+    return metrics, denoised
 
 def evaluate_ssm_constraint(image, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
     
@@ -56,5 +85,13 @@ def evaluate_ssm_constraint(image, method, config_path = r"C:\Users\CL-11\OneDri
     verbose = config['eval']['verbose']
 
     model = load_model(config, verbose)
+    checkpoint = load_checkpoint(config)
 
-    return evaluate(image, model, method)
+    metrics, denoised = evaluate(image, model, method)
+
+    metrics['epochs'] = checkpoint['epoch']
+    metrics['loss'] = checkpoint['best_val_loss']
+    #metrics['model'] = model.__class__.__name__
+    metrics['model'] = str(model)
+
+    return metrics, denoised

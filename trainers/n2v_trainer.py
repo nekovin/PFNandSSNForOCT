@@ -1,7 +1,7 @@
 from schemas.components.train import train
 from utils.config import get_config
 
-def train_n2v(config_path=None):
+def train_n2v(config_path=None, ssm=False):
     
     if config_path is None:
         # Default path to the configuration file
@@ -9,7 +9,7 @@ def train_n2v(config_path=None):
 
     config = get_config(config_path)
 
-    train(config, "n2v", False)
+    train(config, "n2v", ssm)
 
 if __name__ == "__main__":
     train_n2v()

@@ -7,6 +7,7 @@ from utils.data_loading import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
 from utils.visualise import plot_images, plot_computation_graph
+from tqdm import tqdm
 
 def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
     """
@@ -62,11 +63,11 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
     mode = 'train' if model.training else 'val'
     
     epoch_loss = 0
+
+    partition_masks = create_partition_masks((256, 256), n_partitions=2, device=device)
     for batch_idx, (input_imgs, _) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
         batch_size, channels, height, width = input_imgs.shape
-
-        partition_masks = create_partition_masks((height, width), n_partitions=2, device=device)
 
         total_loss = 0
         outputs = None
@@ -153,7 +154,7 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
 
     start_time = time.time()
 
-    for epoch in range(starting_epoch, starting_epoch+epochs):
+    for epoch in tqdm(range(starting_epoch, starting_epoch+epochs)):
         model.train()
 
         train_loss = process_batch_n2s(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)

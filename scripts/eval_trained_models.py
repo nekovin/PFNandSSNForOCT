@@ -28,33 +28,22 @@ def main():
     image = get_sample_image(val_loader, device)
 
     metrics = {}
-    n2_metrics, n2_base_images = evaluate_n2(image)
-    metrics["n2n"] = n2_metrics['n2n']
-    metrics["n2s"] = n2_metrics['n2s']
-    metrics["n2v"] = n2_metrics['n2v']
+    denoised_images = {
+        "original": image.cpu().numpy()[0][0],
+    }
 
-    n2_metrics, n2_ssm_images = evaluate_n2_with_ssm(image)
-    metrics["n2n_ssm"] = n2_metrics['n2n_ssm']
-    metrics["n2s_ssm"] = n2_metrics['n2s_ssm']
-    metrics["n2v_ssm"] = n2_metrics['n2v_ssm']
+    metrics, denoised_images = evaluate_n2(metrics, denoised_images, image)
+
+    metrics, denoised_images = evaluate_n2_with_ssm(metrics, denoised_images, image)
 
     prog_metrics, prog_image = evaluate_progressssive_fusion_unet(image, device)
     metrics["pfn"] = prog_metrics
 
     metrics_df = display_metrics(metrics)
 
-    images = {
-        "original": image.cpu().numpy()[0][0],
-        "n2n": n2_base_images[0],
-        "n2s": n2_base_images[1],
-        "n2v": n2_base_images[2],
-        "n2n_ssm": n2_ssm_images[0],
-        "n2s_ssm": n2_ssm_images[1],
-        "n2v_ssm": n2_ssm_images[2],
-        "pfn": prog_image
-    }
+    denoised_images["pfn"] = prog_image
     
-    plot_images(images, metrics_df)
+    plot_images(denoised_images, metrics_df)
 
 if __name__ == "__main__":
     main()

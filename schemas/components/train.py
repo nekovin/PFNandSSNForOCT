@@ -29,8 +29,9 @@ def train(config, method, ssm):
 
     checkpoint_path = baselines_checkpoint_path + rf"{method}_"
 
-    if config['speckle_module']['use'] is True:
+    if config['speckle_module']['use'] is True or ssm:
         checkpoint_path = checkpoint_path + rf"{model}_ssm"
+        print("Checkpoint path: ", checkpoint_path)
     else:
         checkpoint_path = checkpoint_path + rf"{model}"
 

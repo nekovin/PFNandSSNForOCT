@@ -34,4 +34,8 @@ def evaluate_progressssive_fusion_unet(image, device):
     #ax[0].imshow(sample_image, cmap='gray')
     #ax[1].imshow(denoised, cmap='gray')
     metrics = evaluate_oct_denoising(sample_image, denoised)
+    metrics['epochs'] = checkpoint['epoch']
+    metrics['loss'] = checkpoint['val_loss']
+    
+    metrics['model'] = 'pfn'
     return metrics, denoised
