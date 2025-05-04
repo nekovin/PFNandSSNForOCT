@@ -68,10 +68,9 @@ def calculate_snr(img, background_mask=None):
     # Ensure image is in the right format
     img = np.asarray(img, dtype=np.float32)
     
-    # If no mask provided, estimate background
     if background_mask is None:
         # Assume bottom 10% intensity pixels are background
-        threshold = np.percentile(img, 10)
+        threshold = np.percentile(img, 50)
         background_mask = img <= threshold
     
     # Calculate signal and noise regions

@@ -19,9 +19,9 @@ def plot_images(images, metrics_df):
     plt.show()
 
 def main():
-    random.seed(42)
-    random_number = random.randint(2, 20)
-    train_loader, val_loader = get_loaders(random_number, 1, 50, 8)
+    #random.seed(42)
+    start = random.randint(2, 20)
+    train_loader, val_loader = get_loaders(start, 1, 50, 8)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 

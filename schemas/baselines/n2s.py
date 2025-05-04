@@ -43,6 +43,21 @@ def create_partitioning_function(shape, n_partitions=2):
     
     return partition_function
 
+def create_partition_masks(shape, n_partitions=2, device='cuda'):
+    height, width = shape
+    
+    y_coords = torch.arange(height, device=device).view(-1, 1).repeat(1, width)
+    x_coords = torch.arange(width, device=device).repeat(height, 1)
+
+    coord_sum = (y_coords + x_coords) % n_partitions
+    
+    partition_masks = []
+    for p in range(n_partitions):
+        mask = (coord_sum == p).float()
+        partition_masks.append(mask)
+    
+    return partition_masks
+
 def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
     mode = 'train' if model.training else 'val'
     
@@ -50,18 +65,9 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
     for batch_idx, (input_imgs, _) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
         batch_size, channels, height, width = input_imgs.shape
-        
-        partition_fn = create_partitioning_function((height, width))
-        
-        partition_masks = []
-        for p in range(2):
-            mask = torch.zeros((height, width), device=device)
-            for i in range(height):
-                for j in range(width):
-                    if partition_fn(i, j) == p:
-                        mask[i, j] = 1
-            partition_masks.append(mask)
-        
+
+        partition_masks = create_partition_masks((height, width), n_partitions=2, device=device)
+
         total_loss = 0
         outputs = None
         
@@ -74,25 +80,24 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
             
             curr_outputs = model(masked_input)
             
-            
             if p == 0:
                 outputs = curr_outputs
             
-            target = input_imgs * curr_mask
-            
             pred = curr_outputs * curr_mask
-            
+            target = input_imgs * curr_mask
             loss = criterion(pred, target)
             total_loss += loss
         
         loss = total_loss / len(partition_masks)
+
+        full_output = model(input_imgs)
         
         if speckle_module is not None and outputs is not None:
             flow_inputs = speckle_module(input_imgs)
             flow_inputs = flow_inputs['flow_component'].detach()
             flow_inputs = normalize_image_torch(flow_inputs)
             
-            flow_outputs = speckle_module(outputs)
+            flow_outputs = speckle_module(full_output)
             flow_outputs = flow_outputs['flow_component'].detach()
             flow_outputs = normalize_image_torch(flow_outputs)
             
@@ -105,7 +110,7 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
             optimizer.step()
         
         epoch_loss += loss.item()
-        
+
         if (batch_idx + 1) % 10 == 0:
             print(f"N2S {mode.capitalize()} Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
 
@@ -116,7 +121,7 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
                     input_imgs[0][0].cpu().numpy(),
                     flow_inputs[0][0].cpu().detach().numpy(),
                     flow_outputs[0][0].cpu().detach().numpy(),
-                    outputs[0][0].cpu().detach().numpy()
+                    full_output[0][0].cpu().detach().numpy()
                 ]
                 losses = {
                     'N2S Loss': loss.item() - (flow_loss.item() * alpha if speckle_module else 0),
@@ -128,7 +133,7 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
                 images = [
                     input_imgs[0][0].cpu().numpy(),
                     #outputs[0][0].cpu().detach().numpy()
-                    pred[0][0].cpu().detach().numpy()
+                    full_output[0][0].cpu().detach().numpy()
                 ]
                 losses = {'Total Loss': loss.item()}
                 
@@ -140,12 +145,6 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
 def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
           speckle_module=None, alpha=1, save=False):
-    """
-    Train function that handles both Noise2Void and Noise2Self approaches.
-    
-    Args:
-        method (str): 'n2v' for Noise2Void or 'n2s' for Noise2Self
-    """
 
     last_checkpoint_path = checkpoint_path + f'_last_checkpoint.pth'
     best_checkpoint_path = checkpoint_path + f'_best_checkpoint.pth'
@@ -153,6 +152,7 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
     print(f"Saving checkpoints to {best_checkpoint_path}")
 
     start_time = time.time()
+
     for epoch in range(starting_epoch, starting_epoch+epochs):
         model.train()
 
@@ -191,105 +191,3 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
     print(f"Training completed in {elapsed_time / 60:.2f} minutes")
     
     return model
-
-def _train_n2s(config):
-
-    """
-    Main training function that can train with Noise2Void or Noise2Self.
-    """
-    train_config = config['training']
-    method = "n2s"#train_config['method']
-
-    n_patients = train_config['n_patients']
-    n_images_per_patient = train_config['n_images_per_patient']
-    batch_size = train_config['batch_size']
-    start = train_config['start_patient'] if train_config['start_patient'] else 1
-    
-    model = train_config['model']
-
-    train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
-    
-
-    if config['speckle_module']['use'] is True or use_speckle_module:
-        #checkpoint_path = train_config['base_checkpoint_path_speckle']
-        #checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}_ssm_best_checkpoint.pth'
-        checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}_ssm'
-    else:
-        #checkpoint_path = train_config['base_checkpoint_path'] if train_config['base_checkpoint_path'] else None
-        checkpoint_path = train_config['baselines_checkpoint_path'] + f'{method}/checkpoints/{model}'
-    
-    if not os.path.exists(train_config['baselines_checkpoint_path'] + f'{method}/checkpoints'):
-        os.makedirs(train_config['baselines_checkpoint_path'] + f'{method}/checkpoints')
-
-    #save_dir = train_config['save_dir'] if train_config['save_dir'] else f'{method}/checkpoints'
-    #save_dir.replace("n2n", method)
-
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-    if train_config['model'] == 'UNet':
-        model = UNet(in_channels=1, out_channels=1).to(device)
-    elif train_config['model'] == 'UNet2':
-        model = UNet2(in_channels=1, out_channels=1).to(device)
-
-    optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
-    visualise = train_config['visualise']
-
-    alpha = 1
-    starting_epoch = 0
-    best_val_loss = float('inf')
-
-    save = train_config['save']
-
-    if config['speckle_module']['use'] is True:
-        from ssm.models.ssm_attention import SpeckleSeparationUNetAttention
-        speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)
-        try:
-            print("Loading speckle module from checkpoint...")
-            ssm_checkpoint_path = rf"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\SpeckleSeparationUNetAttention_custom_loss_best.pth"
-            ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
-            speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
-            speckle_module.to(device)
-            alpha = config['speckle_module']['alpha']
-        except Exception as e:
-            print(f"Error loading speckle module: {e}")
-            print("Starting training without speckle module.")
-            speckle_module = None
-    else:
-        speckle_module = None
-
-    if train_config['load']:
-        try:
-            checkpoint = torch.load(checkpoint_path + f'_best_checkpoint.pth', map_location=device)
-            print(f"Loading {method} model from checkpoint...")
-            print(checkpoint_path + f'_best_checkpoint.pth')
-            print(checkpoint.keys())
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            print("Model loaded successfully")
-            print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['best_val_loss']}")
-            starting_epoch = checkpoint['epoch']
-            best_val_loss = checkpoint['val_loss']
-        except Exception as e:
-            print(f"Error loading model checkpoint: {e}")
-            print("Starting training from scratch.")
-
-    if train_config['train']:
-        print(f"Training {method} model...")
-        model = train(
-            model,
-            train_loader,
-            val_loader,
-            optimizer=optimizer,
-            criterion=train_config['criterion'],
-            starting_epoch=starting_epoch,
-            epochs=train_config['epochs'], 
-            batch_size=train_config['batch_size'], 
-            lr=train_config['learning_rate'],
-            best_val_loss=best_val_loss,
-            checkpoint_path=checkpoint_path,
-            device=device,
-            visualise=visualise,
-            speckle_module=speckle_module,
-            alpha=alpha,
-            save=save,
-            method=method)
