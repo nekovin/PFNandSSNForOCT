@@ -20,7 +20,7 @@ def plot_images(images, metrics_df):
 
 def main():
     #random.seed(42)
-    start = random.randint(2, 20)
+    start = random.randint(30, 35)
     train_loader, val_loader = get_loaders(start, 1, 50, 8)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"

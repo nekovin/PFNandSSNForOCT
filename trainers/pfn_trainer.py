@@ -11,6 +11,7 @@ from torchvision.utils import make_grid
 import json
 from models.prog import create_progressive_fusion_dynamic_unet
 from utils.pfn_data import get_dataset
+from utils.config import get_config
 
 def save_checkpoint(epoch, val_loss, model, optimizer, checkpoint_path, img_size):
         """Save model checkpoint"""
@@ -121,6 +122,7 @@ class Trainer:
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
                 save_checkpoint(epoch, val_loss, self.model, self.optimizer, best_checkpoint_path, self.img_size)
+                print(f"Best model saved at epoch {epoch} with val loss {val_loss:.4f}")
             save_checkpoint(epoch, val_loss, self.model, self.optimizer, last_checkpoint_path, self.img_size)
             
             print(f'Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}')
@@ -189,11 +191,16 @@ class Trainer:
         
         return sum(val_losses) / len(val_losses)
 
-def train_pfn():
+def train_pfn(config_path):
     model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
 
-    load = True
+    config = get_config(config_path)
+
+    train_config = config['train']
+    load = train_config['load']
+
     if load:
+        print("Loading model from checkpoint...")
         checkpoint_path = rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\300_best_checkpoint.pth'
         checkpoint = torch.load(checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
