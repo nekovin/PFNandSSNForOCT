@@ -21,7 +21,11 @@ from torchvision import transforms
 from schemas.ssn2v.stage1.preprocessing import preprocessing
 from schemas.ssn2v.stage1.preprocessing_v2 import preprocessing_v2
 
+from contextlib import nullcontext
+
 import torch
+
+from utils.visualise import plot_images
 
 def create_blind_spot_input_fast(image, mask): # This creates an artificial situation: your network learns to reconstruct pixels from surrounding context, but the masking pattern (black dots) doesn't match the actual noise distribution in OCT images.
     blind_input = image.clone()
@@ -956,27 +960,14 @@ def process_batch_n2v(
         model, loader, criterion, mask_ratio,
         optimizer=None,  # Optional parameter - present for training, None for evaluation
         device='cuda',
-        visualize=False
+        speckle_module=None,
+        visualize=False,
+        alpha = 1.0
         ):
-    """
-    Process a batch using the standard Noise2Void approach.
+
     
-    Args:
-        model: The neural network model
-        loader: DataLoader providing batches (returns raw1, raw2)
-        criterion: Loss function for N2V training
-        mask_ratio: Ratio of pixels to mask
-        optimizer: Optimizer (if None, we're in evaluation mode)
-        device: Device to run computations on
-        visualize: Whether to visualize results
-        
-    Returns:
-        float: Average loss for the epoch
-    """
-    from contextlib import nullcontext
     
-    # Set model mode based on whether we're training or evaluating
-    if optimizer:  # If optimizer is provided, we're in training mode
+    if optimizer: 
         model.train()
     else:
         model.eval()
@@ -987,44 +978,99 @@ def process_batch_n2v(
     context_manager = torch.no_grad() if not optimizer else nullcontext()
     
     with context_manager:
-        for batch in loader:
+        for batch_idx, batch in enumerate(loader):
             raw1, raw2 = batch
 
             raw1 = raw1.to(device)
             raw2 = raw2.to(device)
 
-            # Create blind spot mask using Bernoulli distribution
             mask = torch.bernoulli(torch.full((raw1.size(0), 1, raw1.size(2), raw1.size(3)), 
                                             mask_ratio, device=device))
 
-            # Create masked inputs with neighborhood means
             blind1 = create_blind_spot_input_with_realistic_noise(raw1, mask).requires_grad_(True)
             blind2 = create_blind_spot_input_with_realistic_noise(raw2, mask).requires_grad_(True)
             
-            # Zero gradients if we're training
             if optimizer:
                 optimizer.zero_grad()
 
-            # Forward pass through the model
-            outputs1 = model(blind1)
-            outputs2 = model(blind2)
-            
-            # Calculate N2V losses - only on masked pixels
-            n2v_loss1 = criterion(outputs1[mask > 0], raw1[mask > 0])
-            n2v_loss2 = criterion(outputs2[mask > 0], raw2[mask > 0])
+            if speckle_module is not None:
+                flow_inputs = speckle_module(raw1)
+                flow_inputs = flow_inputs['flow_component'].detach()
+                flow_inputs = normalize_image_torch(flow_inputs)
+                outputs1 = model(blind1)
+                
+                #outputs1 = model(blind1)
+                #outputs2 = model(blind2)
+                flow_outputs = speckle_module(outputs1)
+                flow_outputs = flow_outputs['flow_component'].detach()
+                flow_outputs = normalize_image_torch(flow_outputs)
+                flow_loss1 = torch.mean(torch.abs(flow_outputs - flow_inputs))
 
-            # Combine losses (just the N2V losses)
-            loss = n2v_loss1 + n2v_loss2
+                flow_inputs = speckle_module(raw2)
+                flow_inputs = flow_inputs['flow_component'].detach()
+                flow_inputs = normalize_image_torch(flow_inputs)
+                outputs2 = model(blind2)
+                flow_outputs = speckle_module(outputs2)
+                flow_outputs = flow_outputs['flow_component'].detach()
+                flow_outputs = normalize_image_torch(flow_outputs)
+                flow_loss2 = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                
+                n2v_loss1 = criterion(outputs1[mask > 0], raw1[mask > 0])
+                n2v_loss2 = criterion(outputs2[mask > 0], raw2[mask > 0])
+
+                loss = n2v_loss1 + n2v_loss2 + flow_loss1 * alpha + flow_loss2 * alpha
+
+            else:
+                #outputs = model(input_imgs)
+                #loss = criterion(outputs, target_imgs)
+
+                outputs1 = model(blind1)
+                outputs2 = model(blind2)
             
-            # Backprop if we're training
+                n2v_loss1 = criterion(outputs1[mask > 0], raw1[mask > 0])
+                n2v_loss2 = criterion(outputs2[mask > 0], raw2[mask > 0])
+
+                loss = n2v_loss1 + n2v_loss2
+            
             if optimizer:
                 loss.backward()
                 optimizer.step()
             
             total_loss += loss.item()
+
+            if visualize and batch_idx == 0:
+                assert raw1[0][0].shape == (256, 256)
+                assert blind1[0][0].shape == (256, 256)
+                assert outputs1[0][0].shape == (256, 256)
+                
+                if speckle_module is not None:
+                    titles = ['Input Image', 'Flow Input', 'Flow Output', 'Target Image', 'Output Image']
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        flow_inputs[0][0].cpu().detach().numpy(),
+                        flow_outputs[0][0].cpu().detach().numpy(),
+                        blind1[0][0].cpu().numpy(), 
+                        outputs1[0][0].cpu().detach().numpy()
+                    ]
+                    losses = {
+                        'Flow Loss': flow_loss1.item() + flow_loss2.item(),
+                        'Total Loss': loss.item()
+                    }
+                else:
+                    titles = ['Input Image', 'Target Image', 'Output Image']
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        blind1[0][0].cpu().numpy(), 
+                        outputs1[0][0].cpu().detach().numpy()
+                    ]
+                    losses = {
+                        'Total Loss': loss.item()
+                    }
+                    
+                plot_images(images, titles, losses)
             
+            '''
             if visualize:
-                # clear output
                 clear_output(wait=True)
                 visualise_n2v(
                     raw1=raw1.cpu().detach().numpy(),
@@ -1033,6 +1079,7 @@ def process_batch_n2v(
                     output1=outputs1.cpu().detach().numpy(),
                     output2=outputs2.cpu().detach().numpy()
                 )
+            '''
     
     return total_loss / len(loader)
 
@@ -1117,47 +1164,6 @@ def visualise_n2v(raw1, blind1, blind2, output1, output2):
     plt.tight_layout()
     plt.show()
 
-def create_partitioning_function(shape, n_partitions=2):
-    height, width = shape
-    
-    def partition_function(i, j):
-        return (i + j) % n_partitions
-    
-    return partition_function
-
-def lognormal_consistency_loss(denoised, noisy, epsilon=1e-6):
-    """
-    Physics-informed loss term that ensures denoised and noisy images 
-    maintain the expected log-normal relationship for OCT speckle.
-    """
-    # Clamp values to prevent zeros and negatives
-    denoised_safe = torch.clamp(denoised, min=epsilon)
-    noisy_safe = torch.clamp(noisy, min=epsilon)
-    
-    # Calculate ratio between images (speckle should be multiplicative)
-    ratio = noisy_safe / denoised_safe
-    
-    # Clamp ratio to reasonable range to prevent extreme values
-    ratio_safe = torch.clamp(ratio, min=epsilon, max=10.0)
-    
-    # Log-transform the ratio which should follow normal distribution
-    log_ratio = torch.log(ratio_safe)
-    
-    # For log-normal statistics, calculate parameters
-    mu = torch.mean(log_ratio)
-    sigma = torch.std(log_ratio)
-    
-    # Check for NaN values
-    if torch.isnan(mu) or torch.isnan(sigma):
-        return torch.tensor(0.0, device=denoised.device, requires_grad=True)
-    
-    # Expected values for log-normal OCT speckle
-    expected_mu = 0.0  # Calibrate this
-    expected_sigma = 0.5  # Calibrate this
-    
-    # Penalize deviation from expected log-normal statistics
-    loss = torch.abs(mu - expected_mu) + torch.abs(sigma - expected_sigma)
-    return loss
 
 def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
@@ -1183,6 +1189,7 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
         train_loss = process_batch_n2v(model, train_loader, criterion, mask_ratio,
             optimizer=optimizer, 
             device='cuda',
+            speckle_module=speckle_module,
             visualize=False)
         
         model.eval()
@@ -1190,6 +1197,7 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
             val_loss = process_batch_n2v(model, val_loader, criterion, mask_ratio,
                 optimizer=None, 
                 device='cuda',
+                speckle_module=speckle_module,
                 visualize=True)
 
         print(f"Epoch [{epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")

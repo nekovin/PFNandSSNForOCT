@@ -87,7 +87,6 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
 
             #physics_loss = lognormal_consistency_loss(outputs, target_imgs)
             #loss += physics_loss * 0.01
-
         
         if mode == 'train':
             optimizer.zero_grad()
@@ -137,7 +136,9 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
 
     return epoch_loss / len(data_loader)
 
-def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, best_val_loss, checkpoint_path = None,device='cuda', visualise=False, speckle_module=None, alpha=1, save=False):
+def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, 
+              batch_size, lr, best_val_loss, checkpoint_path = None,device='cuda', visualise=False, 
+              speckle_module=None, alpha=1, save=False):
 
     last_checkpoint_path = checkpoint_path + f'_last_checkpoint.pth'
     best_checkpoint_path = checkpoint_path + f'_best_checkpoint.pth'
@@ -148,19 +149,19 @@ def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_ep
     for epoch in range(starting_epoch, starting_epoch+epochs):
         model.train()
 
-        train_loss = process_batch(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
-        
-        #avg_epoch_loss = epoch_loss / len(train_loader)
+        train_loss = process_batch(train_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha)
 
         model.eval()
         with torch.no_grad():
-            val_loss = process_batch(val_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+            val_loss = process_batch(val_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha)
 
-        print(f"Epoch [{epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
+        print(f"Epoch [{epoch+1}/{starting_epoch+epochs}], Average Loss: {train_loss:.6f}")
         
         if val_loss < best_val_loss and save:
             best_val_loss = val_loss
             print(f"Saving best model with val loss: {val_loss:.6f}")
+            print(f"Best checkpoint path: {best_checkpoint_path}")
+            print(f"Epoch: {epoch}, Best val loss: {best_val_loss:.6f}")
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
