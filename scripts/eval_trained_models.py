@@ -1,7 +1,7 @@
 from utils.evaluate import get_sample_image
 from utils.data_loading import get_loaders
 import torch
-from utils.metrics import display_metrics
+from utils.metrics import display_metrics, display_grouped_metrics
 
 from evaluation.evaluate_pfn import evaluate_progressssive_fusion_unet
 from evaluation.evaluate_n2_baselines import evaluate_n2, evaluate_n2_with_ssm
@@ -49,52 +49,6 @@ def main():
 
 
     metrics_df = display_metrics(metrics)
-
-    def display_grouped_metrics(metrics):
-        import pandas as pd
-        from IPython.display import display, HTML
-        
-        # Define base schemas to group by
-        base_schemas = ['n2n', 'n2v', 'n2s', 'pfn']
-        
-        schema_tables = {}
-        
-        # Process each metric key
-        for metric_key in metrics.keys():
-            # Find which base schema this metric belongs to
-            matched_schema = None
-            for schema in base_schemas:
-                if schema in metric_key:
-                    matched_schema = schema
-                    break
-            
-            # If we found a matching schema
-            if matched_schema:
-                # Create the schema group if it doesn't exist
-                if matched_schema not in schema_tables:
-                    schema_tables[matched_schema] = {}
-                
-                # Add this metric column to the appropriate schema group
-                schema_tables[matched_schema][metric_key] = metrics[metric_key]
-        
-        # Display tables for each schema group
-        all_dfs = {}
-        for schema, data in schema_tables.items():
-            if data:  # Only process if we have data
-                df = pd.DataFrame(data)
-                
-                # Apply styling to highlight maximum values in each row
-                def highlight_max(s):
-                    is_max = s == s.max()
-                    return ['font-weight: bold' if v else '' for v in is_max]
-                
-                styled_df = df.style.apply(highlight_max, axis=1)
-                
-                print(f"\n--- {schema.upper()} Models ---")
-                display(styled_df)
-                all_dfs[schema] = df
-        
-        return all_dfs
     
     display_grouped_metrics(metrics)
     

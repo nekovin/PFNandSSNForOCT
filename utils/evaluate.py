@@ -58,6 +58,8 @@ def evaluate(image, model, method):
     denoised = denoised.cpu().numpy()
     #normalised_denoised = normalize_image(denoised)
     #plot_sample(sample_image, denoised, model, method)
+    if len(denoised.shape) == 3 and denoised.shape[0] == 1: # this is because my pfn model retusn a 3d tensor
+        denoised = denoised[-1]
     metrics = evaluate_oct_denoising(sample_image, denoised)
 
     return metrics, denoised

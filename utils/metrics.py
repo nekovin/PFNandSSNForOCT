@@ -9,18 +9,7 @@ import matplotlib.pyplot as plt
 from utils.data_loading import preprocessing_v2
 
 def calculate_psnr(img1, img2, max_value=1.0):
-    """
-    Calculate Peak Signal-to-Noise Ratio (PSNR) between two images.
-    Higher is better.
-    
-    Args:
-        img1, img2: Images to compare
-        max_value: Maximum possible pixel value (1.0 for normalized images)
-    
-    Returns:
-        PSNR value in dB
-    """
-    # Ensure images are in the same shape and type
+
     img1 = np.asarray(img1, dtype=np.float32)
     img2 = np.asarray(img2, dtype=np.float32)
     
@@ -28,8 +17,8 @@ def calculate_psnr(img1, img2, max_value=1.0):
         raise ValueError(f"Images must have the same dimensions: {img1.shape} vs {img2.shape}")
     
     mse = np.mean((img1 - img2) ** 2)
-    if mse == 0:
-        return float('inf')
+    #if mse == 0:
+        #return float('inf')
     
     return 20 * np.log10(max_value / np.sqrt(mse))
 
@@ -294,47 +283,21 @@ def calculate_cnr_whole(image):
     return cnr_db
 
 def evaluate_oct_denoising(original, denoised, reference=None):
-    """
-    Comprehensive evaluation of OCT denoising performance
-    
-    Args:
-        original: Original noisy image
-        denoised: Denoised image
-        reference: Clean reference image (optional)
-    
-    Returns:
-        Dictionary of metrics
-    """
+
     metrics = {}
     
-    # Calculate reference-based metrics if available
-    #if reference is not None:
-        #metrics['psnr'] = calculate_psnr(denoised, reference)
-        #metrics['ssim'] = calculate_ssim(denoised, reference)
-    
-    # Self-reference metrics comparing original to denoised
     metrics['psnr'] = calculate_psnr(denoised, original)
     metrics['ssim'] = calculate_ssim(denoised, original)
     
-    #metrics['snr_original'] = calculate_snr(original)
-    #metrics['snr_denoised'] = calculate_snr(denoised)
-    #print("SNR Original: ", calculate_snr(original))
-    #print("SNR Denoised: ", calculate_snr(denoised))
     metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     
     roi_masks = auto_select_roi(denoised)
     if len(roi_masks) >= 2:
-        #metrics['cnr_original'] = calculate_cnr(original, roi_masks[0], roi_masks[1])
-        #metrics['cnr_denoised'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1])
         metrics['cnr'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1]) - calculate_cnr(original, roi_masks[0], roi_masks[1])
     else:
-        #metrics['cnr_original'] = calculate_cnr_whole(original)
-        #metrics['cnr_denoised'] = calculate_cnr_whole(denoised)
         metrics['cnr'] = calculate_cnr_whole(denoised) - calculate_cnr_whole(original)
     
     if len(roi_masks) > 0:
-        #metrics['enl_original'] = calculate_enl(original, roi_masks[0])
-        #metrics['enl_denoised'] = calculate_enl(denoised, roi_masks[0])
         metrics['enl'] = calculate_enl(denoised, roi_masks[0]) - calculate_enl(original, roi_masks[0])
     
     metrics['epi'] = calculate_epi(original, denoised)
@@ -489,3 +452,46 @@ def display_metrics(metrics):
     styled_df = df.style.apply(highlight_max, axis=1)
     display(styled_df)
     return df
+
+def display_grouped_metrics(metrics):
+        import pandas as pd
+        from IPython.display import display, HTML
+        
+        # Define base schemas to group by
+        base_schemas = ['n2n', 'n2v', 'n2s', 'pfn']
+        
+        schema_tables = {}
+        
+        # Process each metric key
+        for metric_key in metrics.keys():
+            # Find which base schema this metric belongs to
+            matched_schema = None
+            for schema in base_schemas:
+                if schema in metric_key:
+                    matched_schema = schema
+                    break
+            
+            if matched_schema:
+                if matched_schema not in schema_tables:
+                    schema_tables[matched_schema] = {}
+                
+                schema_tables[matched_schema][metric_key] = metrics[metric_key]
+        
+        # Display tables for each schema group
+        all_dfs = {}
+        for schema, data in schema_tables.items():
+            if data:  # Only process if we have data
+                df = pd.DataFrame(data)
+                
+                # Apply styling to highlight maximum values in each row
+                def highlight_max(s):
+                    is_max = s == s.max()
+                    return ['font-weight: bold' if v else '' for v in is_max]
+                
+                styled_df = df.style.apply(highlight_max, axis=1)
+                
+                print(f"\n--- {schema.upper()} Models ---")
+                display(styled_df)
+                all_dfs[schema] = df
+        
+        return all_dfs

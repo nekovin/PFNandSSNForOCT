@@ -14,28 +14,42 @@ def denoise_image(model, image, device):
         denoised_image = outputs[0] 
     return denoised_image
 
+from utils.evaluate import evaluate
+
 def evaluate_progressssive_fusion_unet(image, device):
 
     config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml")
 
     eval_config = config['evaluation']
 
-    temp_checkpoint_path = eval_config['temp_checkpoint_path']
+    #temp_checkpoint_path = eval_config['temp_checkpoint_path']
+
+    base_checkpoint_path = eval_config['base_checkpoint_path']
+    ablation = eval_config['ablation']
+    model_name = eval_config['model_name']
 
     #model = create_progressive_fusion_dynamic_unet().to(device)
-    model = ProgUNet(in_channels=1, out_channels=1).to(device)
-    checkpoint = torch.load(temp_checkpoint_path, map_location=device)
+    if model_name == "ProgUNet":
+        model = ProgUNet(in_channels=1, out_channels=1).to(device)
+        checkpoint_path = base_checkpoint_path + f"{ablation}/{model}_best_checkpoint.pth"
+    else:
+        raise ValueError(f"Unknown model name: {model_name}")
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
-    denoised = denoise_image(model, image, device)
-    denoised = denoised.cpu().numpy()[0][0]
-    sample_image = image.cpu().numpy()[0][0]
+    metrics, denoised = evaluate(image, model, "pfn")
+
+    #denoised = denoise_image(model, image, device)
+
+    #denoised = denoised.cpu().numpy()[0][0]
+    #sample_image = image.cpu().numpy()[0][0]
     #denoised = normalize_image(denoised)
     #fig, ax = plt.subplots(1, 2, figsize=(10, 5))
     #ax[0].imshow(sample_image, cmap='gray')
     #ax[1].imshow(denoised, cmap='gray')
-    metrics = evaluate_oct_denoising(sample_image, denoised)
+    #metrics = evaluate_oct_denoising(sample_image, denoised)
     metrics['epochs'] = checkpoint['epoch']
     metrics['loss'] = checkpoint['val_loss']
     
