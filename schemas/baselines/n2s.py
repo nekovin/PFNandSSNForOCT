@@ -59,12 +59,13 @@ def create_partition_masks(shape, n_partitions=2, device='cuda'):
     
     return partition_masks
 
-def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
+def _process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
     mode = 'train' if model.training else 'val'
     
     epoch_loss = 0
 
     partition_masks = create_partition_masks((256, 256), n_partitions=2, device=device)
+    
     for batch_idx, (input_imgs, _) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
         batch_size, channels, height, width = input_imgs.shape
@@ -134,6 +135,100 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
                 images = [
                     input_imgs[0][0].cpu().numpy(),
                     #outputs[0][0].cpu().detach().numpy()
+                    full_output[0][0].cpu().detach().numpy()
+                ]
+                losses = {'Total Loss': loss.item()}
+                
+            plot_images(images, titles, losses)
+
+    return epoch_loss / len(data_loader)
+
+def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
+    from torch.cuda.amp import autocast, GradScaler
+    
+    mode = 'train' if model.training else 'val'
+    epoch_loss = 0
+    
+    # Create scaler for mixed precision training (only needed for training)
+    scaler = GradScaler() if mode == 'train' else None
+    
+    # Create partition masks once outside the batch loop
+    partition_masks = create_partition_masks((256, 256), n_partitions=2, device=device)
+    
+    for batch_idx, (input_imgs, _) in enumerate(data_loader):
+        input_imgs = input_imgs.to(device)
+        batch_size, channels, height, width = input_imgs.shape
+
+        # Use automatic mixed precision
+        with autocast():
+            total_loss = 0
+            outputs = None
+            
+            for p in range(len(partition_masks)):
+                curr_mask = partition_masks[p].unsqueeze(0).unsqueeze(0).expand_as(input_imgs)
+                comp_mask = 1 - curr_mask
+                
+                masked_input = input_imgs * comp_mask
+                curr_outputs = model(masked_input)
+                
+                if p == 0:
+                    outputs = curr_outputs
+                
+                pred = curr_outputs * curr_mask
+                target = input_imgs * curr_mask
+                loss = criterion(pred, target)
+                total_loss += loss
+            
+            loss = total_loss / len(partition_masks)
+
+            full_output = model(input_imgs)
+            
+            if speckle_module is not None and outputs is not None:
+                flow_inputs = speckle_module(input_imgs)
+                flow_inputs = flow_inputs['flow_component'].detach()
+                flow_inputs = normalize_image_torch(flow_inputs)
+                
+                flow_outputs = speckle_module(full_output)
+                flow_outputs = flow_outputs['flow_component'].detach()
+                flow_outputs = normalize_image_torch(flow_outputs)
+                
+                flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                loss = loss + flow_loss * alpha
+        
+        # For training, use gradient scaling
+        if mode == 'train':
+            optimizer.zero_grad()
+            if scaler is not None:
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
+        
+        epoch_loss += loss.item()
+
+        if (batch_idx + 1) % 10 == 0:
+            print(f"N2S {mode.capitalize()} Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
+
+        if visualise and batch_idx == 0 and outputs is not None:
+            if speckle_module is not None:
+                titles = ['Input Image', 'Flow Input', 'Flow Output', 'Output Image']
+                images = [
+                    input_imgs[0][0].cpu().numpy(),
+                    flow_inputs[0][0].cpu().detach().numpy(),
+                    flow_outputs[0][0].cpu().detach().numpy(),
+                    full_output[0][0].cpu().detach().numpy()
+                ]
+                losses = {
+                    'N2S Loss': loss.item() - (flow_loss.item() * alpha if speckle_module else 0),
+                    'Flow Loss': flow_loss.item() if speckle_module else 0,
+                    'Total Loss': loss.item()
+                }
+            else:
+                titles = ['Input Image', 'Output Image']
+                images = [
+                    input_imgs[0][0].cpu().numpy(),
                     full_output[0][0].cpu().detach().numpy()
                 ]
                 losses = {'Total Loss': loss.item()}

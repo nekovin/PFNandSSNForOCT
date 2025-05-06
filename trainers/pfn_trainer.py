@@ -10,8 +10,10 @@ import numpy as np
 from torchvision.utils import make_grid
 import json
 from models.prog import create_progressive_fusion_dynamic_unet
+from models.prog_unet import load_prog_unet, ProgUNet
 from utils.pfn_data import get_dataset
 from utils.config import get_config
+import os
 
 def save_checkpoint(epoch, val_loss, model, optimizer, checkpoint_path, img_size):
         """Save model checkpoint"""
@@ -83,16 +85,15 @@ class Trainer:
         val_loader,
         learning_rate=1e-4,
         device='cuda' if torch.cuda.is_available() else 'cpu',
-        checkpoint_dir=rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints',
+        checkpoint_path=None,
         img_size=300,
     ):
         self.model = model.to(device)
         self.train_loader = train_loader
         self.val_loader = val_loader
         self.device = device
-        self.checkpoint_dir = Path(checkpoint_dir)
-        self.checkpoint_dir.mkdir(exist_ok=True)
         self.img_size = img_size
+        self.checkpoint_path = checkpoint_path
 
         self.vis_dir = Path('../visualizations')
         self.vis_dir.mkdir(exist_ok=True)
@@ -106,9 +107,11 @@ class Trainer:
         self.history = {'train_loss': [], 'val_loss': []}
 
     def train(self, num_epochs):
+        if self.checkpoint_path is None:
+            raise ValueError("Checkpoint path is not set. Please provide a valid path.")
         best_val_loss = float('inf')
-        best_checkpoint_path = self.checkpoint_dir / f'{self.img_size}_best_checkpoint.pth'
-        last_checkpoint_path = self.checkpoint_dir / f'{self.img_size}_last_checkpoint.pth'
+        best_checkpoint_path = self.checkpoint_path + f'_best_checkpoint.pth'
+        last_checkpoint_path = self.checkpoint_path + f'_last_checkpoint.pth'
         
         for epoch in range(num_epochs):
             train_loss = self.train_epoch(epoch)
@@ -145,10 +148,8 @@ class Trainer:
             input_img = data[:, 0, :, :, :]  # Input image
             target_images = [data[:, i, :, :, :] for i in range(1, num_levels + 1)]  # Targets
             
-            # Forward pass with dynamic levels
             outputs = self.model(input_img, num_levels, target_images[0].shape)
             
-            # Compute loss dynamically
             for output, target in zip(outputs, target_images):
                 output = normalize_to_target(output, target)
                 batch_loss += self.l1_loss(output, target)
@@ -192,17 +193,27 @@ class Trainer:
         return sum(val_losses) / len(val_losses)
 
 def train_pfn(config_path):
-    model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
+    #model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
+    
 
     config = get_config(config_path)
 
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    model = ProgUNet(in_channels=1, out_channels=1).to(device)
+    #model = load_prog_unet(config)
+
     train_config = config['train']
     load = train_config['load']
+    base_checkpoint_path = train_config['base_checkpoint_path']
+    if not os.path.exists(base_checkpoint_path):
+         os.makedirs(base_checkpoint_path, exist_ok=True)
+    checkpoint_path = base_checkpoint_path + f"{model}"
 
     if load:
         print("Loading model from checkpoint...")
-        checkpoint_path = rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\300_best_checkpoint.pth'
-        checkpoint = torch.load(checkpoint_path)
+        #checkpoint_path = rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\300_best_checkpoint.pth'
+        best_checkpoint_path = checkpoint_path + '_best_checkpoint.pth'
+        checkpoint = torch.load(best_checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
         print("Model loaded successfully.")
     else:
@@ -211,9 +222,11 @@ def train_pfn(config_path):
     levels = None
     img_size = 300
 
-    train_loader, val_loader, test_loader = get_dataset(basedir=r'C:\Users\CL-11\OneDrive\Repos\phf\data\FusedDataset', size=img_size, levels=levels)
+    #basedir=r'C:\Users\CL-11\OneDrive\Repos\phf\data\FusedDataset'
 
-    trainer = Trainer(model, train_loader, val_loader, img_size=img_size)
+    train_loader, val_loader, test_loader = get_dataset(basedir=r'C:\Datasets\OCTData\data\FusedDataset', size=img_size, levels=levels)
+
+    trainer = Trainer(model, train_loader, val_loader, img_size=img_size, checkpoint_path=checkpoint_path)
     history = trainer.train(num_epochs=5)
 
     with open('training_history.json', 'w') as f:

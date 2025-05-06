@@ -1,4 +1,5 @@
 from models.prog import create_progressive_fusion_dynamic_unet
+from models.prog_unet import ProgUNet
 from utils.postprocessing import normalize_image
 from utils.evaluate import evaluate_oct_denoising
 import matplotlib.pyplot as plt
@@ -21,7 +22,8 @@ def evaluate_progressssive_fusion_unet(image, device):
 
     temp_checkpoint_path = eval_config['temp_checkpoint_path']
 
-    model = create_progressive_fusion_dynamic_unet().to(device)
+    #model = create_progressive_fusion_dynamic_unet().to(device)
+    model = ProgUNet(in_channels=1, out_channels=1).to(device)
     checkpoint = torch.load(temp_checkpoint_path, map_location=device)
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()

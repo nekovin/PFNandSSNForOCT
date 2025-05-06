@@ -11,11 +11,15 @@ import random
 import matplotlib.pyplot as plt
 
 def plot_images(images, metrics_df):
-    fig, ax = plt.subplots(1, len(images), figsize=(20, 10))
+    fig, ax = plt.subplots(2, 4, figsize=(20, 10))
     for i, (key, image) in enumerate(images.items()):
-        ax[i].imshow(image, cmap='gray')
-        ax[i].set_title(key)
-        ax[i].axis('off')
+        #ax[i].imshow(image, cmap='gray')
+        #ax[i].set_title(key)
+        #ax[i].axis('off')
+        ax[i // 4, i % 4].imshow(image, cmap='gray')
+        ax[i // 4, i % 4].set_title(key)
+        ax[i // 4, i % 4].axis('off')
+        
     plt.show()
 
 def main():
@@ -37,14 +41,16 @@ def main():
 
     metrics, denoised_images = evaluate_n2(metrics, denoised_images, image)
 
-    metrics, denoised_images = evaluate_n2_with_ssm(metrics, denoised_images, image)
-
     prog_metrics, prog_image = evaluate_progressssive_fusion_unet(image, device)
     metrics["pfn"] = prog_metrics
+    denoised_images["pfn"] = prog_image
+
+    metrics, denoised_images = evaluate_n2_with_ssm(metrics, denoised_images, image)
+
 
     metrics_df = display_metrics(metrics)
 
-    denoised_images["pfn"] = prog_image
+    
     
     plot_images(denoised_images, metrics_df)
 

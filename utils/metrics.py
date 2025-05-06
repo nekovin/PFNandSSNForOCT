@@ -318,8 +318,8 @@ def evaluate_oct_denoising(original, denoised, reference=None):
     
     #metrics['snr_original'] = calculate_snr(original)
     #metrics['snr_denoised'] = calculate_snr(denoised)
-    print("SNR Original: ", calculate_snr(original))
-    print("SNR Denoised: ", calculate_snr(denoised))
+    #print("SNR Original: ", calculate_snr(original))
+    #print("SNR Denoised: ", calculate_snr(denoised))
     metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     
     roi_masks = auto_select_roi(denoised)
