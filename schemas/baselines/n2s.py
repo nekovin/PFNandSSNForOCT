@@ -149,17 +149,13 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
     mode = 'train' if model.training else 'val'
     epoch_loss = 0
     
-    # Create scaler for mixed precision training (only needed for training)
     scaler = GradScaler() if mode == 'train' else None
     
-    # Create partition masks once outside the batch loop
-    partition_masks = create_partition_masks((256, 256), n_partitions=2, device=device)
+    partition_masks = create_partition_masks((256, 256), n_partitions=4, device=device)
     
     for batch_idx, (input_imgs, _) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
-        batch_size, channels, height, width = input_imgs.shape
 
-        # Use automatic mixed precision
         with autocast():
             total_loss = 0
             outputs = None
@@ -195,7 +191,6 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
                 flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
                 loss = loss + flow_loss * alpha
         
-        # For training, use gradient scaling
         if mode == 'train':
             optimizer.zero_grad()
             if scaler is not None:
@@ -258,7 +253,7 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
         with torch.no_grad():
             val_loss = process_batch_n2s(val_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
 
-        print(f"Epoch [{epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
+        print(f"Epoch [{starting_epoch+epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
         
         if val_loss < best_val_loss and save:
             best_val_loss = val_loss

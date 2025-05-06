@@ -24,7 +24,7 @@ from schemas.ssn2v.stage1.preprocessing_v2 import preprocessing_v2
 from contextlib import nullcontext
 
 import torch
-
+from tqdm import tqdm
 from utils.visualise import plot_images
 
 def create_blind_spot_input_fast(image, mask): # This creates an artificial situation: your network learns to reconstruct pixels from surrounding context, but the masking pattern (black dots) doesn't match the actual noise distribution in OCT images.
@@ -964,8 +964,6 @@ def process_batch_n2v(
         visualize=False,
         alpha = 1.0
         ):
-
-    
     
     if optimizer: 
         model.train()
@@ -974,11 +972,10 @@ def process_batch_n2v(
     
     total_loss = 0.0
     
-    # Use nullcontext when training, torch.no_grad when evaluating
     context_manager = torch.no_grad() if not optimizer else nullcontext()
     
     with context_manager:
-        for batch_idx, batch in enumerate(loader):
+        for batch_idx, batch in enumerate(tqdm(loader)):
             raw1, raw2 = batch
 
             raw1 = raw1.to(device)
@@ -1200,7 +1197,7 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
                 speckle_module=speckle_module,
                 visualize=True)
 
-        print(f"Epoch [{epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
+        print(f"Epoch [{epoch+1}/{starting_epoch+epochs}], Average Loss: {train_loss:.6f}")
         
         if val_loss < best_val_loss and save:
             best_val_loss = val_loss
