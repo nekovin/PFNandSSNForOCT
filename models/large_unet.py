@@ -13,6 +13,7 @@ class LargeUNet(nn.Module):
         self.enc5_features = 1024
         self.bottleneck_features = 1024
         
+        # Encoder (downsampling) with increasing feature dimensions
         self.enc1 = self._block(in_channels, self.enc1_features, name="enc1")
         self.enc2 = self._block(self.enc1_features, self.enc2_features, name="enc2")
         self.enc3 = self._block(self.enc2_features, self.enc3_features, name="enc3")
@@ -20,23 +21,45 @@ class LargeUNet(nn.Module):
         self.enc5 = self._block(self.enc4_features, self.enc5_features, name="enc5")
         
         # Bottleneck
-        self.bottleneck = self._block(self.bottleneck_features, self.bottleneck_features, name="bottleneck")
+        #self.bottleneck = self._block(self.bottleneck_features, self.bottleneck_features, name="bottleneck")
+        self.bottleneck = self._block_dilated(self.bottleneck_features, self.bottleneck_features, name="bottleneck")
         
-        self.dec1 = self._block(self.bottleneck_features + self.enc5_features, self.enc4_features, name="dec1")
-        self.dec2 = self._block(self.enc4_features + self.enc4_features, self.enc3_features, name="dec2")
-        self.dec3 = self._block(self.enc3_features + self.enc3_features, self.enc2_features, name="dec3")
-        self.dec4 = self._block(self.enc2_features + self.enc2_features, self.enc1_features, name="dec4")
+        self.dec1 = self._block(self.bottleneck_features + self.enc5_features, self.enc5_features, name="dec1")
+        self.dec2 = self._block(self.enc5_features + self.enc4_features, self.enc4_features, name="dec2")
+        self.dec3 = self._block(self.enc4_features + self.enc3_features, self.enc3_features, name="dec3")
+        self.dec4 = self._block(self.enc3_features + self.enc2_features, self.enc2_features, name="dec4")
+        self.dec5 = self._block(self.enc2_features + self.enc1_features, self.enc1_features, name="dec5")
+
         
-        self.final = nn.Conv2d(self.enc1_features, out_channels, kernel_size=1)
+        # Final layer
+        #self.final = nn.Conv2d(self.enc1_features, out_channels, kernel_size=1)
+        self.final = nn.Conv2d(self.enc1_features, out_channels, kernel_size=1, padding=0)
         
+        # Max pooling
         self.pool = nn.MaxPool2d(2)
+
+    # padding options are dilation, reflection, and zeros
         
     def _block(self, in_channels, features, name):
         return nn.Sequential(
-            nn.Conv2d(in_channels, features, kernel_size=3, padding=1, bias=False),
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(in_channels, features, kernel_size=3, bias=False),
             nn.BatchNorm2d(features),
             nn.ReLU(inplace=True),
-            nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
+            nn.ReflectionPad2d(1),
+            nn.Conv2d(features, features, kernel_size=3, bias=False),
+            nn.BatchNorm2d(features),
+            nn.ReLU(inplace=True)
+        )
+
+    def _block_dilated(self, in_channels, features, name):
+        return nn.Sequential(
+            nn.ReflectionPad2d(2),  # Padding of 2 for dilation of 2
+            nn.Conv2d(in_channels, features, kernel_size=3, dilation=2, bias=False),
+            nn.BatchNorm2d(features),
+            nn.ReLU(inplace=True),
+            nn.ReflectionPad2d(2),  # Padding of 2 for dilation of 2
+            nn.Conv2d(features, features, kernel_size=3, dilation=2, bias=False),
             nn.BatchNorm2d(features),
             nn.ReLU(inplace=True)
         )
@@ -47,18 +70,20 @@ class LargeUNet(nn.Module):
         enc2 = self.enc2(self.pool(enc1))
         enc3 = self.enc3(self.pool(enc2))
         enc4 = self.enc4(self.pool(enc3))
-        enc5 = self.enc5(self.pool(enc4))
+        enc5 = self.enc5(self.pool(enc5))
         
         # Bottleneck
         bottleneck = self.bottleneck(self.pool(enc5))
         
         # Decoder with skip connections
-        dec1 = self.dec1(torch.cat([F.interpolate(bottleneck, scale_factor=2, mode='bilinear', align_corners=False), enc5], dim=1))
-        dec2 = self.dec2(torch.cat([F.interpolate(dec1, scale_factor=2, mode='bilinear', align_corners=False), enc4], dim=1))
-        dec3 = self.dec3(torch.cat([F.interpolate(dec2, scale_factor=2, mode='bilinear', align_corners=False), enc3], dim=1))
-        dec4 = self.dec4(torch.cat([F.interpolate(dec3, scale_factor=2, mode='bilinear', align_corners=False), enc2], dim=1))
-        
-        output = F.interpolate(dec4, scale_factor=2, mode='bilinear', align_corners=False)
+        dec1 = self.dec1(torch.cat([F.interpolate(bottleneck, scale_factor=2, mode='nearest'), enc5], dim=1)) # nearest or bilinear
+        dec2 = self.dec2(torch.cat([F.interpolate(dec1, scale_factor=2, mode='nearest'), enc4], dim=1))
+        dec3 = self.dec3(torch.cat([F.interpolate(dec2, scale_factor=2, mode='nearest'), enc3], dim=1))
+        dec4 = self.dec4(torch.cat([F.interpolate(dec3, scale_factor=2, mode='nearest'), enc2], dim=1))
+        dec5 = self.dec5(torch.cat([F.interpolate(dec4, scale_factor=2, mode='nearest'), enc1], dim=1))
+
+        output = dec5
+
         return self.final(output)
     
     def __str__(self):
@@ -68,7 +93,7 @@ def load_unet(config):
     checkpoint_path = config['training']['checkpoint_path']
     load = config['training']['load']
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = LargeUNet(in_channels=1, out_channels=1).to(device)
+    model = UNet(in_channels=1, out_channels=1).to(device)
     if load:
         try:
             model.load_state_dict(torch.load(checkpoint_path, map_location=device))

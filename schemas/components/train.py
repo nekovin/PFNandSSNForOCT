@@ -50,6 +50,8 @@ def train(config, method, ssm):
         model = LargeUNet(in_channels=1, out_channels=1).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
+
     visualise = train_config['visualise']
 
     alpha = 1
@@ -108,7 +110,8 @@ def train(config, method, ssm):
                 visualise=visualise,
                 speckle_module=speckle_module,
                 alpha=alpha,
-                save=save)
+                save=save,
+                scheduler=scheduler)
             
         elif method == "n2v":
             model = train_n2v(

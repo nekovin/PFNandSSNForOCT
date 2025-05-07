@@ -19,7 +19,8 @@ class UNet(nn.Module):
         self.enc4 = self._block(self.enc3_features, self.enc4_features, name="enc4")
         
         # Bottleneck
-        self.bottleneck = self._block(self.bottleneck_features, self.bottleneck_features, name="bottleneck")
+        #self.bottleneck = self._block(self.bottleneck_features, self.bottleneck_features, name="bottleneck")
+        self.bottleneck = self._block_dilated(self.bottleneck_features, self.bottleneck_features, name="bottleneck")
         
         self.dec1 = self._block(self.bottleneck_features + self.enc4_features, self.enc4_features, name="dec1")
         self.dec2 = self._block(self.enc4_features + self.enc3_features, self.enc3_features, name="dec2")
@@ -39,11 +40,27 @@ class UNet(nn.Module):
         return nn.Sequential(
             nn.ReflectionPad2d(1),
             nn.Conv2d(in_channels, features, kernel_size=3, bias=False),
-            nn.BatchNorm2d(features),
+            #nn.BatchNorm2d(features),
+            nn.InstanceNorm2d(features),
             nn.ReLU(inplace=True),
             nn.ReflectionPad2d(1),
             nn.Conv2d(features, features, kernel_size=3, bias=False),
-            nn.BatchNorm2d(features),
+            #nn.BatchNorm2d(features),
+            nn.InstanceNorm2d(features),
+            nn.ReLU(inplace=True)
+        )
+
+    def _block_dilated(self, in_channels, features, name):
+        return nn.Sequential(
+            nn.ReflectionPad2d(2),  # Padding of 2 for dilation of 2
+            nn.Conv2d(in_channels, features, kernel_size=3, dilation=2, bias=False),
+            #nn.BatchNorm2d(features),
+            nn.InstanceNorm2d(features),
+            nn.ReLU(inplace=True),
+            nn.ReflectionPad2d(2),  # Padding of 2 for dilation of 2
+            nn.Conv2d(features, features, kernel_size=3, dilation=2, bias=False),
+            #nn.BatchNorm2d(features),
+            nn.InstanceNorm2d(features), # trying this out
             nn.ReLU(inplace=True)
         )
     

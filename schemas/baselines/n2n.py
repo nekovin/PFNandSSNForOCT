@@ -62,7 +62,7 @@ def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
         t_img = torch.where(t_img < 0.01, torch.zeros_like(t_img), t_img)
     return t_img
 
-def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha):
+def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha, scheduler):
     mode = 'train' if model.training else 'val'
     
     epoch_loss = 0
@@ -91,7 +91,10 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
         if mode == 'train':
             optimizer.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
             optimizer.step()
+        else:
+            scheduler.step(loss)
         
         epoch_loss += loss.item()
         
@@ -138,7 +141,7 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
 
 def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, 
               batch_size, lr, best_val_loss, checkpoint_path = None,device='cuda', visualise=False, 
-              speckle_module=None, alpha=1, save=False):
+              speckle_module=None, alpha=1, save=False, scheduler=None):
 
     last_checkpoint_path = checkpoint_path + f'_last_checkpoint.pth'
     best_checkpoint_path = checkpoint_path + f'_best_checkpoint.pth'
@@ -149,11 +152,11 @@ def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_ep
     for epoch in range(starting_epoch, starting_epoch+epochs):
         model.train()
 
-        train_loss = process_batch(train_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha)
+        train_loss = process_batch(train_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha, scheduler)
 
         model.eval()
         with torch.no_grad():
-            val_loss = process_batch(val_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha)
+            val_loss = process_batch(val_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha, scheduler)
 
         print(f"Epoch [{epoch+1}/{starting_epoch+epochs}], Average Loss: {train_loss:.6f}")
         
