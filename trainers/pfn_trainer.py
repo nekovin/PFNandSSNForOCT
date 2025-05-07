@@ -14,6 +14,7 @@ from models.prog_unet import load_prog_unet, ProgUNet
 from utils.pfn_data import get_dataset
 from utils.config import get_config
 import os
+from utils.visualise import plot_images
 
 def save_checkpoint(epoch, val_loss, model, optimizer, checkpoint_path, img_size):
         """Save model checkpoint"""
@@ -129,7 +130,9 @@ class Trainer:
             save_checkpoint(epoch, val_loss, self.model, self.optimizer, last_checkpoint_path, self.img_size)
             
             print(f'Epoch {epoch}: Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}')
+            
             #plot_losses(self.history, self.vis_dir)
+
         return self.history
 
     def train_epoch(self, epoch):
@@ -167,6 +170,7 @@ class Trainer:
     def validate(self):
         self.model.eval()
         val_losses = []
+        visualise = True
         
         with torch.no_grad():
             for data, _ in tqdm(self.val_loader, desc='Validating'):
@@ -188,7 +192,17 @@ class Trainer:
                 
                 val_losses.append(batch_loss.item())
 
-                #visualize_batch(0, 0, input_img, outputs, target_images, self.vis_dir)
+            if visualise:
+                titles = ['Input Image', 'Target Image', 'Output Image']
+                images = [ 
+                    input_img[0][0].cpu().numpy(), 
+                    target_images[0][0][0].cpu().numpy(), 
+                    outputs[0][0][0].cpu().detach().numpy()
+                ]
+                losses = {
+                    'Total Loss': batch_loss.item()
+                }
+                plot_images(images, titles, losses)
         
         return sum(val_losses) / len(val_losses)
 
