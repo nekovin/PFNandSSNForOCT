@@ -72,8 +72,8 @@ def load_patient_data(base_path, verbose=False):
 
 def standard_preprocessing(oct_volume):
     preprocessed = []
+    #print(oct_volume[0].shape)
     for img in oct_volume:
-        # Normalize to [0, 1] if not already, just incase
         if img.max() > 1.0:
             img = img / 255.0
         
@@ -82,8 +82,35 @@ def standard_preprocessing(oct_volume):
             img_with_channel = img.reshape(*img.shape, 1)
         else:
             img_with_channel = img
-        
         resized = cv2.resize(img_with_channel, (256, 256), interpolation=cv2.INTER_LINEAR)
+        preprocessed.append(resized)
+
+    #print(f"Preprocessed shape: {preprocessed[0].shape}")
+
+    return np.array(preprocessed)
+
+def standard_preprocessing(oct_volume):
+    preprocessed = []
+    #print(f"Number of images: {len(oct_volume)}")
+    #print(f"First image shape: {oct_volume[0].shape}")
+    
+    for i, img in enumerate(oct_volume):
+        #print(f"Image {i} - Original shape: {img.shape}, dtype: {img.dtype}")
+        
+        if img.max() > 1.0:
+            img = img / 255.0
+        
+        # Force 2D image (handle any dimensionality issues)
+        if len(img.shape) > 2:
+            img = img[:, :, 0]  # Take first channel
+        
+        # Resize consistently
+        resized = cv2.resize(img, (256, 256), interpolation=cv2.INTER_LINEAR)
+        
+        # Explicitly add channel dimension
+        resized = resized[:, :, np.newaxis]
+        
+        #print(f"Image {i} - Resized shape: {resized.shape}")
         preprocessed.append(resized)
 
     return np.array(preprocessed)
@@ -245,31 +272,6 @@ def remove_speckle_noise(image, min_size=5):
     
     return image
 
-def preprocessing_v2(n_patients, n_images_per_patient, n_neighbours=2, threshold=0.65):
-    dataset = {}
-    try:
-        for i in range(1,n_patients):
-            data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
-
-            preprocessed_data = standard_preprocessing(data)
-
-            octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)
-
-            cleaned_octa_data = []
-            for octa_img in octa_data:
-                cleaned_img = remove_speckle_noise(octa_img, min_size=5)
-                cleaned_octa_data.append(cleaned_img)
-
-            #input_target_data = pair_data(preprocessed_data, octa_data, n_images_per_patient)
-            input_target_data = pair_data(preprocessed_data, cleaned_octa_data, n_images_per_patient)
-
-            dataset[i] = input_target_data[5:-5]
-
-        return dataset
-    
-    except Exception as e:
-        print(f"Error in preprocessing: {e}")
-
 def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
     
     dataset = {}
@@ -277,7 +279,11 @@ def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbour
         for i in range(start, start+n_patients):
             data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
             assert len(data) > 0, f"No data found for patient {i}"
+            
             preprocessed_data = standard_preprocessing(data)
+
+            
+
             octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)
             
             cleaned_octa_data = []
@@ -348,7 +354,7 @@ class OCTDataset(Dataset):
             
         return input_tensor, target_tensor
 
-def get_loaders(start = 20, n_patients=2, n_images_per_patient=50, batch_size=8, 
+def get_loaders(start, n_patients=2, n_images_per_patient=50, batch_size=8, 
                 val_split=0.2, shuffle=True, random_seed=42):
 
     full_dataset = OCTDataset(start, n_patients=n_patients, n_images_per_patient=n_images_per_patient)
