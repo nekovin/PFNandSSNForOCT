@@ -95,6 +95,7 @@ class Trainer:
         self.device = device
         self.img_size = img_size
         self.checkpoint_path = checkpoint_path
+        self.starting_epoch = 0
 
         self.vis_dir = Path('../visualizations')
         self.vis_dir.mkdir(exist_ok=True)
@@ -208,7 +209,8 @@ class Trainer:
 
 def train_pfn(config_path):
     #model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
-    
+    img_size = 300
+    levels = None
 
     config = get_config(config_path)
 
@@ -223,25 +225,31 @@ def train_pfn(config_path):
          os.makedirs(base_checkpoint_path, exist_ok=True)
     checkpoint_path = base_checkpoint_path + f"{model}"
 
+    train_loader, val_loader, test_loader = get_dataset(basedir=r'C:\Datasets\OCTData\data\FusedDataset', size=img_size, levels=levels)
+
+    
+
+    trainer = Trainer(model, train_loader, val_loader, img_size=img_size, checkpoint_path=checkpoint_path)
+
     if load:
         print("Loading model from checkpoint...")
         #checkpoint_path = rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\300_best_checkpoint.pth'
         best_checkpoint_path = checkpoint_path + '_best_checkpoint.pth'
         checkpoint = torch.load(best_checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
+        
+        trainer.starting_epoch = checkpoint['epoch']
         print("Model loaded successfully.")
     else:
         print("Model not loaded.")
 
-    levels = None
-    img_size = 300
+    
+    
 
     #basedir=r'C:\Users\CL-11\OneDrive\Repos\phf\data\FusedDataset'
+    epochs = train_config['epochs']
 
-    train_loader, val_loader, test_loader = get_dataset(basedir=r'C:\Datasets\OCTData\data\FusedDataset', size=img_size, levels=levels)
-
-    trainer = Trainer(model, train_loader, val_loader, img_size=img_size, checkpoint_path=checkpoint_path)
-    history = trainer.train(num_epochs=5)
+    history = trainer.train(num_epochs=epochs)
 
     with open('training_history.json', 'w') as f:
         json.dump(history, f) # Save the training history to a JSON file

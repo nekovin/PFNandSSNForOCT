@@ -8,6 +8,10 @@ from utils.metrics import evaluate_oct_denoising
 
 import matplotlib.pyplot as plt
 import numpy as np
+from tqdm import tqdm
+
+from skimage import io
+from skimage.transform import resize
 
 def get_sample_image(dataloader, device):
     sample = next(iter(dataloader))
@@ -67,3 +71,61 @@ def evaluate(image, reference, model, method):
     metrics = evaluate_oct_denoising(sample_image, denoised, reference)
 
     return metrics, denoised
+
+
+def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
+    """Load all images from the SDOCT dataset and resize them.
+    
+    Args:
+        dataset_path: Path to the SDOCT dataset directory
+        target_size: Size to resize images to
+        
+    Returns:
+        Dictionary containing patient data with raw and averaged images
+    """
+    sdoct_data = {}
+    patients = os.listdir(dataset_path)
+    
+    print(f"Loading SDOCT dataset from {dataset_path}")
+    for patient in tqdm(patients, desc="Loading patients"):
+        patient_path = os.path.join(dataset_path, patient)
+        avg_path = os.path.join(patient_path, f"{patient}_Averaged Image.tif")
+        raw_path = os.path.join(patient_path, f"{patient}_Raw Image.tif")
+        
+        try:
+            # Check if both files exist
+            if not os.path.exists(avg_path) or not os.path.exists(raw_path):
+                print(f"Missing files for patient {patient}")
+                continue
+                
+            # Load and resize images
+            raw_img = io.imread(raw_path)
+            avg_img = io.imread(avg_path)
+            
+            # Normalize images to 0-1 range if needed
+            if raw_img.max() > 1.0:
+                raw_img = raw_img / 255.0
+            if avg_img.max() > 1.0:
+                avg_img = avg_img / 255.0
+                
+            # Resize images
+            raw_img = resize(raw_img, target_size, anti_aliasing=True)
+            avg_img = resize(avg_img, target_size, anti_aliasing=True)
+            
+            # Convert to PyTorch tensors
+            raw_tensor = torch.from_numpy(raw_img).float().unsqueeze(0).unsqueeze(0)
+            avg_tensor = torch.from_numpy(avg_img).float().unsqueeze(0).unsqueeze(0)
+            
+            # Store in dictionary
+            sdoct_data[patient] = {
+                "raw": raw_tensor,
+                "avg": avg_tensor,
+                "raw_np": raw_img,
+                "avg_np": avg_img
+            }
+            
+        except Exception as e:
+            print(f"Error processing patient {patient}: {e}")
+    
+    print(f"Successfully loaded {len(sdoct_data)} patients")
+    return sdoct_data

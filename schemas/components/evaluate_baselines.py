@@ -57,6 +57,7 @@ def load_model(config, verbose=False):
         print(f"Model loaded successfully")
     return model
 
+
 def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
     
     config = get_config(config_path)

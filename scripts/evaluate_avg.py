@@ -456,8 +456,13 @@ def display_avg_metrics(avg_metrics):
     
     return df
 
+from utils.config import get_config
+from IPython.display import clear_output 
+
 def main():
     # Set device
+
+    eval_config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\eval.yaml")
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
@@ -471,10 +476,6 @@ def main():
         "original": dataset[first_patient]["raw_np"],
         "avg": dataset[first_patient]["avg_np"],
     }
-
-    exclude_models = ["n2s", "n2v"]
-    
-    patient_dfs = []
     
     for patient_id, patient_data in tqdm(dataset.items(), desc="Evaluating patients"):
         raw_image = patient_data["raw"].to(device)
@@ -489,8 +490,7 @@ def main():
         
         metrics, denoised_images = evaluate_n2(metrics, denoised_images, raw_image, reference)
         
-        use_prog = False
-        if use_prog:
+        if not eval_config["exclude"]['pfn']:
             prog_metrics, prog_image = evaluate_progressssive_fusion_unet(raw_image, reference, device)
             metrics["pfn"] = prog_metrics
             denoised_images["pfn"] = prog_image
@@ -506,6 +506,8 @@ def main():
             if key not in all_patient_metrics:
                 all_patient_metrics[key] = []
             all_patient_metrics[key].append(value)
+
+        clear_output(wait=True)
     
     # Save results to CSV
     metrics_df = pd.DataFrame([
