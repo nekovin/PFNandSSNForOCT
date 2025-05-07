@@ -57,17 +57,24 @@ def load_model(config, verbose=False):
         print(f"Model loaded successfully")
     return model
 
-def evaluate_baseline(image, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
+def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
     
     config = get_config(config_path)
     
     config['eval']['method'] = method
+    
     verbose = config['eval']['verbose']
+
+    exclude = config['eval']['exclude'][method]
+
+    if exclude:
+        print(f"Method {method} is excluded from evaluation.")
+        return None, None
 
     model = load_model(config, verbose)
     checkpoint = load_checkpoint(config)
 
-    metrics, denoised = evaluate(image, model, method)
+    metrics, denoised = evaluate(image, reference, model, method)
 
     metrics['epochs'] = checkpoint['epoch']
     metrics['loss'] = checkpoint['best_val_loss']
@@ -76,9 +83,13 @@ def evaluate_baseline(image, method, config_path = r"C:\Users\CL-11\OneDrive\Rep
 
     return metrics, denoised
 
-def evaluate_ssm_constraint(image, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
+def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
     
     config = get_config(config_path)
+
+    exclude = config['eval']['exclude'][method]
+    if exclude:
+        return None, None
     
     config['speckle_module']['use'] = True
     config['eval']['method'] = method
@@ -87,7 +98,7 @@ def evaluate_ssm_constraint(image, method, config_path = r"C:\Users\CL-11\OneDri
     model = load_model(config, verbose)
     checkpoint = load_checkpoint(config)
 
-    metrics, denoised = evaluate(image, model, method)
+    metrics, denoised = evaluate(image, reference, model, method)
 
     metrics['epochs'] = checkpoint['epoch']
     metrics['loss'] = checkpoint['best_val_loss']

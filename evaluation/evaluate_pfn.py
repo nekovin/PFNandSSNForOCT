@@ -16,7 +16,7 @@ def denoise_image(model, image, device):
 
 from utils.evaluate import evaluate
 
-def evaluate_progressssive_fusion_unet(image, device):
+def evaluate_progressssive_fusion_unet(image, reference, device):
 
     config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml")
 
@@ -39,7 +39,7 @@ def evaluate_progressssive_fusion_unet(image, device):
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
-    metrics, denoised = evaluate(image, model, "pfn")
+    metrics, denoised = evaluate(image, reference, model, "pfn")
 
     #denoised = denoise_image(model, image, device)
 

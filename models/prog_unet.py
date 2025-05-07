@@ -22,6 +22,7 @@ class ProgUNet(nn.Module):
         self.dec1 = self._block(self.bottleneck_features + self.enc4_features, self.enc3_features, name="dec1")
         self.dec2 = self._block(self.enc3_features + self.enc3_features, self.enc2_features, name="dec2")
         self.dec3 = self._block(self.enc2_features + self.enc2_features, self.enc1_features, name="dec3")
+        self.dec4 = self._block(self.enc1_features + self.enc1_features, self.enc1_features, name="dec4")
         
         self.final = nn.Conv2d(self.enc1_features, out_channels, kernel_size=1)
         
@@ -62,12 +63,14 @@ class ProgUNet(nn.Module):
         dec2_up = F.interpolate(dec2, size=enc2.shape[2:], mode='bilinear', align_corners=False)
         dec3 = self.dec3(torch.cat([dec2_up, enc2], dim=1))
         
-        dec_final = F.interpolate(dec3, size=enc1.shape[2:], mode='bilinear', align_corners=False)
-        final_output = self.final(dec_final)
-        final_upscaled = F.interpolate(final_output, size=x.shape[2:], mode='bilinear', align_corners=False)
+        dec3_up = F.interpolate(dec3, size=enc1.shape[2:], mode='bilinear', align_corners=False)
+        dec4 = self.dec4(torch.cat([dec3_up, enc1], dim=1))
+
+        #final_output = self.final(dec_final)
+        #final_upscaled = F.interpolate(final_output, size=x.shape[2:], mode='bilinear', align_corners=False)
         
         outputs = [
-            (1 - self.residual_weight) * final_upscaled + self.residual_weight * input_image
+            (1 - self.residual_weight) * dec4 + self.residual_weight * input_image
             for _ in range(n_targets)
         ]
         return outputs

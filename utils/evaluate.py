@@ -45,21 +45,25 @@ def denoise_image(model, image, device):
         denoised_image = model(image)
     return denoised_image
 
-
-
 load_dotenv()
 
 device = os.getenv("DEVICE")
 device
 
-def evaluate(image, model, method):
+def evaluate(image, reference, model, method):
+
     denoised = denoise_image(model, image, device='cuda')[0][0]
-    sample_image = image.cpu().numpy()[0][0]
+
+    try:
+        sample_image = image.cpu().numpy()[0][0]
+    except:
+        sample_image = image
+
     denoised = denoised.cpu().numpy()
-    #normalised_denoised = normalize_image(denoised)
-    #plot_sample(sample_image, denoised, model, method)
-    if len(denoised.shape) == 3 and denoised.shape[0] == 1: # this is because my pfn model retusn a 3d tensor
-        denoised = denoised[-1]
-    metrics = evaluate_oct_denoising(sample_image, denoised)
+    reference = reference.cpu().numpy()
+
+    if len(denoised.shape) == 3: # this is because my pfn model retusn a 3d tensor
+        denoised = denoised[0]
+    metrics = evaluate_oct_denoising(sample_image, denoised, reference)
 
     return metrics, denoised

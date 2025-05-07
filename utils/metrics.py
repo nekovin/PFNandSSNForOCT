@@ -285,9 +285,12 @@ def calculate_cnr_whole(image):
 def evaluate_oct_denoising(original, denoised, reference=None):
 
     metrics = {}
+
+    print(original.shape, denoised.shape, reference.shape)
+    #print(original.device, denoised.device, reference.device)
     
-    metrics['psnr'] = calculate_psnr(denoised, original)
-    metrics['ssim'] = calculate_ssim(denoised, original)
+    metrics['psnr'] = calculate_psnr(denoised, reference)
+    metrics['ssim'] = calculate_ssim(denoised, reference)
     
     metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     

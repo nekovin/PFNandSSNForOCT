@@ -1,12 +1,14 @@
 from utils.data_loading import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
+from models.large_unet import LargeUNet
 from models.ssm_attention import SpeckleSeparationUNetAttention
 import torch.optim as optim
 import torch
 from schemas.baselines.n2n import train_n2n
 from schemas.baselines.n2v import train_n2v
 from schemas.baselines.n2s import train_n2s
+import os
 
 def train(config, method, ssm):
 
@@ -24,6 +26,9 @@ def train(config, method, ssm):
     train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
 
     baselines_checkpoint_path = train_config['baselines_checkpoint_path']
+
+    if not os.path.exists(baselines_checkpoint_path):
+        os.makedirs(baselines_checkpoint_path)
     
     model = train_config['model']
 
@@ -41,6 +46,8 @@ def train(config, method, ssm):
         model = UNet(in_channels=1, out_channels=1).to(device)
     elif train_config['model'] == 'UNet2':
         model = UNet2(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'LargeUNet':
+        model = LargeUNet(in_channels=1, out_channels=1).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
     visualise = train_config['visualise']
