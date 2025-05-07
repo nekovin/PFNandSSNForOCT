@@ -3,37 +3,6 @@ import time
 import torch
 from utils.visualise import plot_images
 from tqdm import tqdm
-
-def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise): 
-    """
-    Process a batch of data through the model, compute loss, and update weights.
-    WITHOUT speckle module.
-    """
-    epoch_loss = 0
-    for batch_idx, (input_imgs, target_imgs) in tqdm(enumerate(data_loader)):
-        input_imgs = input_imgs.to(device)
-        target_imgs = target_imgs.to(device)
-        
-        outputs = model(input_imgs)
-        loss = criterion(outputs, target_imgs)
-        
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        
-        epoch_loss += loss.item()
-        
-        if (batch_idx + 1) % 10 == 0:
-            print(f"Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
-
-        if visualise:
-            assert input_imgs[0][0].shape == (256, 256)
-            assert target_imgs[0][0].shape == (256, 256)
-            assert outputs[0][0].shape == (256, 256)
-            images = [input_imgs[0][0].cpu().numpy(), target_imgs[0][0].cpu().numpy(), outputs[0][0].cpu().detach().numpy()]
-            plot_images(images)
-
-        return epoch_loss
     
 def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
     """

@@ -17,14 +17,14 @@ class ProgUNet(nn.Module):
         self.enc3 = self._block(self.enc2_features, self.enc3_features, name="enc3")
         self.enc4 = self._block(self.enc3_features, self.enc4_features, name="enc4")
         
-        self.bottleneck = self._block_dilated(self.enc4_features, self.bottleneck_features, name="bottleneck")
+        self.bottleneck = self._block(self.enc4_features, self.bottleneck_features, name="bottleneck")
         
         self.dec1 = self._block(self.bottleneck_features + self.enc4_features, self.enc3_features, name="dec1")
         self.dec2 = self._block(self.enc3_features + self.enc3_features, self.enc2_features, name="dec2")
         self.dec3 = self._block(self.enc2_features + self.enc2_features, self.enc1_features, name="dec3")
         self.dec4 = self._block(self.enc1_features + self.enc1_features, self.enc1_features, name="dec4")
         
-        self.final = nn.Conv2d(self.enc1_features, out_channels, kernel_size=1, padding=0)
+        self.final = nn.Conv2d(self.enc1_features, out_channels, kernel_size=1)
         
         self.pool = nn.MaxPool2d(2)
 
@@ -32,27 +32,11 @@ class ProgUNet(nn.Module):
         
     def _block(self, in_channels, features, name):
         return nn.Sequential(
-            nn.Conv2d(in_channels, features, kernel_size=3, padding=1, bias=True),
-            #nn.BatchNorm2d(features),
-            nn.InstanceNorm2d(features),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(features, features, kernel_size=3, padding=1, bias=True),
+            nn.Conv2d(in_channels, features, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(features),
-            nn.InstanceNorm2d(features),
-            nn.ReLU(inplace=True)
-        )
-    
-    def _block_dilated(self, in_channels, features, name):
-        return nn.Sequential(
-            nn.ReflectionPad2d(2),  # Padding of 2 for dilation of 2
-            nn.Conv2d(in_channels, features, kernel_size=3, dilation=2, bias=True),
-            #nn.BatchNorm2d(features),
-            nn.InstanceNorm2d(features),
             nn.ReLU(inplace=True),
-            nn.ReflectionPad2d(2),  # Padding of 2 for dilation of 2
-            nn.Conv2d(features, features, kernel_size=3, dilation=2, bias=True),
-            #nn.BatchNorm2d(features),
-            nn.InstanceNorm2d(features), # trying this out
+            nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(features),
             nn.ReLU(inplace=True)
         )
     

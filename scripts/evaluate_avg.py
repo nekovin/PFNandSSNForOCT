@@ -471,7 +471,9 @@ def main():
     
     all_patient_metrics = {}
 
-    first_patient = list(dataset.keys())[0]
+    patient = eval_config['data']["patient"]
+
+    first_patient = list(dataset.keys())[patient]
     visualization_images = {
         "original": dataset[first_patient]["raw_np"],
         "avg": dataset[first_patient]["avg_np"],
