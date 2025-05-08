@@ -459,10 +459,10 @@ def display_avg_metrics(avg_metrics):
 from utils.config import get_config
 from IPython.display import clear_output 
 
-def main():
+def main(eval_override=None):
     # Set device
 
-    eval_config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\eval.yaml")
+    eval_config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\eval.yaml", eval_override)
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
@@ -489,15 +489,19 @@ def main():
             "original": patient_data["raw_np"],
             "avg": patient_data["avg_np"],
         }
-        
-        metrics, denoised_images = evaluate_n2(metrics, denoised_images, raw_image, reference)
+        n2_config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"
+        try:
+            metrics, denoised_images = evaluate_n2(metrics, denoised_images, n2_config_path, eval_override['n2_eval'], raw_image, reference)
+        except Exception as e:
+            raise e
         
         if not eval_config["exclude"]['pfn']:
-            prog_metrics, prog_image = evaluate_progressssive_fusion_unet(raw_image, reference, device)
+            pfn_config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml"
+            prog_metrics, prog_image = evaluate_progressssive_fusion_unet(raw_image, reference, device, pfn_config_path, eval_override['prog_config'])
             metrics["pfn"] = prog_metrics
             denoised_images["pfn"] = prog_image
         
-        metrics, denoised_images = evaluate_n2_with_ssm(metrics, denoised_images, raw_image, reference)
+        metrics, denoised_images = evaluate_n2_with_ssm(metrics, denoised_images, n2_config_path, eval_override['n2_eval'], raw_image, reference)
         
         # Save first patient's denoised images for visualization
         if patient_id == first_patient:

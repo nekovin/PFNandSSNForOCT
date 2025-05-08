@@ -3,7 +3,7 @@ from utils.evaluate import get_sample_image
 from utils.data_loading import get_loaders
 import torch
 
-def evaluate_n2(metrics, denoised_images, image=None, reference=None, device = "cuda" if torch.cuda.is_available() else "cpu"):
+def evaluate_n2(metrics, denoised_images, config_path, eval_override, image=None, reference=None, device = "cuda" if torch.cuda.is_available() else "cpu"):
 
     if image is None:
 
@@ -12,7 +12,7 @@ def evaluate_n2(metrics, denoised_images, image=None, reference=None, device = "
         
     images = []
     try:
-        n2n_metrics, n2n_denoised = evaluate_baseline(image, reference, "n2n")
+        n2n_metrics, n2n_denoised = evaluate_baseline(image, reference, "n2n", config_path, eval_override)
         if n2n_metrics is None:
             raise ValueError("Metrics for n2n are None")
         else:
@@ -24,7 +24,7 @@ def evaluate_n2(metrics, denoised_images, image=None, reference=None, device = "
         print(f"Error evaluating n2n: {e}")
 
     try:
-        n2s_metrics, n2s_denoised = evaluate_baseline(image, reference, "n2s")
+        n2s_metrics, n2s_denoised = evaluate_baseline(image, reference, "n2s", config_path, eval_override)
         if n2s_metrics is None:
             raise ValueError("Metrics for n2s are None")
         else:
@@ -36,7 +36,7 @@ def evaluate_n2(metrics, denoised_images, image=None, reference=None, device = "
         print(f"Error evaluating n2s: {e}")
 
     try:
-        n2v_metrics, n2v_denoised = evaluate_baseline(image, reference, "n2v")
+        n2v_metrics, n2v_denoised = evaluate_baseline(image, reference, "n2v", config_path, eval_override)
         if n2v_metrics is None:
             raise ValueError("Metrics for n2v are None")
         else:
@@ -49,7 +49,7 @@ def evaluate_n2(metrics, denoised_images, image=None, reference=None, device = "
 
     return metrics, denoised_images
 
-def evaluate_n2_with_ssm(metrics, denoised_images, image=None, reference=None, device = "cuda" if torch.cuda.is_available() else "cpu"):
+def evaluate_n2_with_ssm(metrics, denoised_images, config_path, eval_override, image=None, reference=None, device = "cuda" if torch.cuda.is_available() else "cpu"):
 
     if image is None:
 
@@ -58,7 +58,7 @@ def evaluate_n2_with_ssm(metrics, denoised_images, image=None, reference=None, d
 
     images = []
     try:
-        n2n_metrics, n2n_denoised = evaluate_ssm_constraint(image, reference, "n2n")
+        n2n_metrics, n2n_denoised = evaluate_ssm_constraint(image, reference, "n2n", config_path, eval_override)
         if n2n_metrics is None:
             raise ValueError("Metrics for n2s are None")
         else:
@@ -70,7 +70,7 @@ def evaluate_n2_with_ssm(metrics, denoised_images, image=None, reference=None, d
         print(f"Error evaluating n2n with SSM: {e}")
     
     try:
-        n2s_metrics, n2s_denoised = evaluate_ssm_constraint(image, reference, "n2s")
+        n2s_metrics, n2s_denoised = evaluate_ssm_constraint(image, reference, "n2s", config_path, eval_override)
         if n2s_metrics is None:
             raise ValueError("Metrics for n2s are None")
         else:
@@ -82,7 +82,7 @@ def evaluate_n2_with_ssm(metrics, denoised_images, image=None, reference=None, d
         print(f"Error evaluating n2s with SSM: {e}")
     
     try:
-        n2v_metrics, n2v_denoised = evaluate_ssm_constraint(image, reference, "n2v")
+        n2v_metrics, n2v_denoised = evaluate_ssm_constraint(image, reference, "n2v", config_path, eval_override)
         if n2v_metrics is None:
             raise ValueError("Metrics for n2v are None")
         else:

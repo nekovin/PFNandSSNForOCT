@@ -16,9 +16,9 @@ def denoise_image(model, image, device):
 
 from utils.evaluate import evaluate
 
-def evaluate_progressssive_fusion_unet(image, reference, device):
+def evaluate_progressssive_fusion_unet(image, reference, device, config_path=r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml", prog_override_dict=None):
 
-    config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml")
+    config = get_config(config_path, prog_override_dict)
 
     eval_config = config['evaluation']
 

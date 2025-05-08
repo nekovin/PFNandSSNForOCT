@@ -25,18 +25,19 @@ def train(config, method, ssm):
     n_images_per_patient = train_config['n_images_per_patient']
     batch_size = train_config['batch_size']
     start = train_config['start_patient'] if train_config['start_patient'] else 1
+    ablation = train_config['ablation']
 
     train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
     #train_loader2, val_loader2 = get_loaders(37, 3, n_images_per_patient, batch_size)
 
-    baselines_checkpoint_path = train_config['baselines_checkpoint_path']
+    baselines_checkpoint_path = train_config['baselines_checkpoint_path'] + ablation
+
+    model = train_config['model']
+
+    checkpoint_path = baselines_checkpoint_path + rf"/{method}_"
 
     if not os.path.exists(baselines_checkpoint_path):
         os.makedirs(baselines_checkpoint_path)
-    
-    model = train_config['model']
-
-    checkpoint_path = baselines_checkpoint_path + rf"{method}_"
 
     if config['speckle_module']['use'] is True or ssm:
         checkpoint_path = checkpoint_path + rf"{model}_ssm"
@@ -65,6 +66,22 @@ def train(config, method, ssm):
     best_val_loss = float('inf')
 
     save = train_config['save']
+
+    # save config as text
+    config_checkpoint_path = baselines_checkpoint_path + '/config_text/'
+    print("Config checkpoint path: ", config_checkpoint_path)
+    if not os.path.exists(config_checkpoint_path):
+        os.makedirs(config_checkpoint_path)
+    with open(config_checkpoint_path + 'config.txt', 'w') as f:
+        f.write(f"Training method: {method}\n")
+        f.write(f"Model: {model}\n")
+        f.write(f"Batch size: {batch_size}\n")
+        f.write(f"Learning rate: {train_config['learning_rate']}\n")
+        f.write(f"Epochs: {train_config['epochs']}\n")
+        f.write(f"Start patient: {start}\n")
+        f.write(f"Ablation: {ablation}\n")
+        f.write(f"Number of patients: {n_patients}\n")
+        f.write(f"Number of images per patient: {n_images_per_patient}\n")
 
     if config['speckle_module']['use'] is True or ssm:
         speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)

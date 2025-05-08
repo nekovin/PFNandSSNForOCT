@@ -209,12 +209,12 @@ class Trainer:
 
 from models.prog_custom import ProgLargeUNet
 
-def train_pfn(config_path):
+def train_pfn(config_path, override_dict):
     #model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
     img_size = 300
     levels = None
 
-    config = get_config(config_path)
+    config = get_config(config_path, override_dict)
 
     large = config['model']['large']
 
@@ -230,19 +230,20 @@ def train_pfn(config_path):
     train_config = config['train']
     load = train_config['load']
     base_checkpoint_path = train_config['base_checkpoint_path']
-    if not os.path.exists(base_checkpoint_path):
-         os.makedirs(base_checkpoint_path, exist_ok=True)
-    checkpoint_path = base_checkpoint_path + f"{model}"
+    ablation = train_config['ablation']
+    ablation_checkpoint_path = base_checkpoint_path + ablation
+    if not os.path.exists(ablation_checkpoint_path):
+         os.makedirs(ablation_checkpoint_path, exist_ok=True)
+    checkpoint_path = ablation_checkpoint_path + f"/prog_{model}"
 
-    train_loader, val_loader, test_loader = get_dataset(basedir=r'C:\Datasets\OCTData\data\FusedDataset', size=img_size, levels=levels)
+    n_patients = train_config['n_patients']
 
+    train_loader, val_loader, test_loader = get_dataset(basedir=r'C:\Datasets\OCTData\data\FusedDataset', size=img_size, levels=levels, n_patients=n_patients)
     
-
     trainer = Trainer(model, train_loader, val_loader, img_size=img_size, checkpoint_path=checkpoint_path)
 
     if load:
         print("Loading model from checkpoint...")
-        #checkpoint_path = rf'C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\300_best_checkpoint.pth'
         best_checkpoint_path = checkpoint_path + '_best_checkpoint.pth'
         checkpoint = torch.load(best_checkpoint_path)
         model.load_state_dict(checkpoint['model_state_dict'])
@@ -251,9 +252,6 @@ def train_pfn(config_path):
         print("Model loaded successfully.")
     else:
         print("Model not loaded.")
-
-    
-    
 
     #basedir=r'C:\Users\CL-11\OneDrive\Repos\phf\data\FusedDataset'
     epochs = train_config['epochs']

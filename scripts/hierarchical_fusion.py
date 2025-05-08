@@ -2,10 +2,8 @@ import os
 import re
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
 from PIL import Image
 from tqdm import tqdm
-from pathlib import Path
 
 def extract_number(filename):
     """Extract number from filename pattern (number)"""
@@ -83,6 +81,25 @@ def save_fused_images(fused_images, level, output_dir):
     
     print(f"Saved {len(fused_images)} fused images at Level {level} in {output_dir}")
 
+def fuse_images(image_list, diabetes, patient, output_dir, level=0):
+    """Recursively fuse images to create fusion levels"""
+    if len(image_list) <= 1:
+        return
+    
+    fused_images = []
+
+    for i in range(0, len(image_list), 2):
+        if i + 1 < len(image_list):
+            fused = np.mean([image_list[i], image_list[i + 1]], axis=0)
+        else:
+            fused = image_list[i]
+        fused_images.append(fused)
+    
+    output_dir = output_dir + f"_{level}"
+    save_fused_images(fused_images, level, output_dir)
+    
+    fuse_images(fused_images, diabetes, patient, output_dir, level + 1)
+
 def fuse_images(image_list, diabetes, patient, base_output_dir, level=0):
     """Recursively fuse images to create fusion levels"""
     if len(image_list) <= 1:
@@ -97,19 +114,14 @@ def fuse_images(image_list, diabetes, patient, base_output_dir, level=0):
             fused = image_list[i]
         fused_images.append(fused)
     
-    #output_dir = f'../data/FusedDataset/{diabetes}/{patient}/FusedImages_Level_{level}'
-    #output_dir = os.path.join(output_dir, f'_{level}')
-    #output_dir = base_output_dir + f"_{level}"
-    print(f"Diabetes: {diabetes}, Patient: {patient}, Level: {level}")
-    output_dir = f'../data/FusedDataset/{diabetes}/{patient}/FusedImages_Level_{level}'
-    print(f"Output directory: {output_dir}")
-    save_fused_images(fused_images, level, output_dir)
+    # Create a new output directory for this level instead of appending to the path
+    current_output_dir = f"{base_output_dir}_{level}"
+    save_fused_images(fused_images, level, current_output_dir)
     
+    # Pass the original base_output_dir to the next recursive call
     fuse_images(fused_images, diabetes, patient, base_output_dir, level + 1)
 
-from utils.config import get_config
-
-def main(config_path=None):
+def single(config_path=None):
 
     if not config_path:
         patient_int = 1
@@ -140,14 +152,6 @@ def main(config_path=None):
             base_output_dir = fusion_config['base_output_path']
             output_dir = base_output_dir + f'/{diabetes}/{patient}/FusedImages_Level'
             print(f"Output directory: {output_dir}")
-    
-            
-    
-    print(patient)
-    
-    #datasetpath = f'C:\Datasets\OCTData\ICIP training data\\{diabetes}\{patient}'
-    print(f"Dataset path: {dataset_path}")
-    print(f"Path exists: {os.path.exists(dataset_path)}")
     
     images = sorted(
         [os.path.join(dataset_path, image) for image in os.listdir(dataset_path)],
@@ -203,6 +207,103 @@ def main(config_path=None):
     print(f"Output directory: {output_dir}")
     
     fuse_images(good_image_arrays, diabetes, patient, output_dir, level=0)
+
+from utils.config import get_config
+
+def main(config_path=None, override=None):
+
+    if not config_path:
+        patient_int = 1
+        patient = fr'RawDataQA ({patient_int})'
+        diabetes = 2
+
+        
+    else:
+        config = get_config(config_path, override)
+
+        fusion_config = config['fusion']
+
+        base_dataset_path = fusion_config['base_dataset_path']
+        base_output_dir = fusion_config['base_output_path']
+
+        diabetes = fusion_config['diabetes']
+
+    start_patient = fusion_config['start_patient']
+    end_patient = fusion_config['end_patient']
+
+    for diabetes in range(0, 2+1):
+        if diabetes == 0:
+            end_patient = 42+1
+        if diabetes == 1:
+            end_patient = 30+1
+        if diabetes == 2:
+            end_patient = 28+1
+        for patient_int in range(start_patient, end_patient):
+            patient = f'RawDataQA ({patient_int})'
+
+            if diabetes != 0:
+                patient = patient.replace(' ', f'-{diabetes} ')
+                
+            dataset_path = os.path.join(base_dataset_path, str(diabetes), patient)
+            print(f"Processing dataset: {dataset_path}")
+
+            dataset_path = base_dataset_path + f'/{diabetes}/{patient}'
+            
+            output_dir = base_output_dir + f'/{diabetes}/{patient}/FusedImages_Level'
+
+            #if not os.path.exists(output_dir):
+                #os.makedirs(output_dir)
+
+            print(os.listdir(dataset_path))
+        
+            images = sorted(
+                [os.path.join(dataset_path, image) for image in os.listdir(dataset_path)],
+                key=lambda x: extract_number(os.path.basename(x))
+            )
+            
+            loaded_images = [Image.open(image) for image in images]
+            image_arrays = [np.array(image) for image in loaded_images]
+            
+            stacked_images = np.stack(image_arrays, axis=0)
+            fused_image_array = np.mean(stacked_images, axis=0).astype(np.uint8)
+            reference_mask = create_oct_mask(fused_image_array)
+            
+            masks = process_folder(dataset_path)
+
+            dice_scores = []
+            jaccard_scores = []
+            image_paths = []
+            
+            for mask_name, mask in masks.items():
+                mask = (mask > 0).astype(np.uint8)
+                
+                if reference_mask.shape != mask.shape:
+                    resized_reference = cv2.resize(
+                        reference_mask, 
+                        (mask.shape[1], mask.shape[0]), 
+                        interpolation=cv2.INTER_NEAREST
+                    )
+                else:
+                    resized_reference = reference_mask
+                
+                resized_reference = (resized_reference > 0).astype(np.uint8)
+                
+                dice = compute_dice_coefficient(mask, resized_reference)
+                jaccard = compute_jaccard_index(mask, resized_reference)
+                
+                dice_scores.append(dice)
+                jaccard_scores.append(jaccard)
+                image_paths.append(mask_name)
+            
+            dice_threshold = 0.5
+            good_images = [image_paths[i] for i, dice in enumerate(dice_scores) if dice >= dice_threshold]
+            
+            good_image_arrays = []
+            for img in good_images:
+                npimg = cv2.imread(os.path.join(dataset_path, img))
+                good_image_arrays.append(npimg)
+            
+            fuse_images(good_image_arrays, diabetes, patient, output_dir, level=0)
     
 
 if __name__ == "__main__":

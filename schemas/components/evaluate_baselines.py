@@ -34,7 +34,8 @@ def load_model(config, verbose=False):
     print(f"Loading model: {model}")
     print(f"Checkpoint path: {checkpoint_path}")
     
-    checkpoint = torch.load(checkpoint_path, map_location=device)
+    #checkpoint = torch.load(checkpoint_path, map_location=device)
+    checkpoint = load_checkpoint(config)
     model.load_state_dict(checkpoint['model_state_dict'])
 
     if verbose:
@@ -53,16 +54,17 @@ def load_model(config, verbose=False):
 def load_checkpoint(config):
     eval_config = config['eval']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
+    ablation = eval_config['ablation']
     method = eval_config['method']
     model = eval_config['model']
     if config['speckle_module']['use']:
         best = config['speckle_module']['best']
         if best:
-            checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_best_checkpoint.pth"
         else:
-            checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_last_checkpoint.pth"
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_last_checkpoint.pth"
     else:
-        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
+        checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_best_checkpoint.pth"
     
     print(f"Checkpoint path: {checkpoint_path}")
     
@@ -72,9 +74,9 @@ def load_checkpoint(config):
     
     return checkpoint
 
-def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
+def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_config = None):
     
-    config = get_config(config_path)
+    config = get_config(config_path, override_config)
     
     config['eval']['method'] = method
     
@@ -99,9 +101,9 @@ def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\O
 
     return metrics, denoised
 
-def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"):
+def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_dict = None):
     
-    config = get_config(config_path)
+    config = get_config(config_path, override_dict)
 
     exclude = config['eval']['exclude'][method]
     if exclude:

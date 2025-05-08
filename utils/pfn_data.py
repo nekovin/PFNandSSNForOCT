@@ -20,18 +20,29 @@ import cv2
 from tqdm import tqdm
 
 class FusionDataset:
-    def __init__(self, basedir, size, transform=None, levels=None):
+    def __init__(self, basedir, size, transform=None, levels=None, n_patients=1):
         self.transform = transforms.Compose([transforms.Resize(size), transforms.ToTensor()])
         self.image_groups = []
         self.size = size
         self.levels = levels
 
+        n, m = 0, 0
+
         for p in os.listdir(basedir):
+
+            n += 1
+            if n > 1: # currently diabetes
+                break
+
             level_dir = os.path.join(basedir, p)
             if not os.path.isdir(level_dir):
                 continue
 
             for patient in os.listdir(level_dir):
+                m += 1
+                print(m)
+                if m > n_patients: # currently diabetes
+                    break
                 patient_dir = os.path.join(level_dir, patient)
                 level_0_dir = os.path.join(patient_dir, "FusedImages_Level_0")
 
@@ -100,11 +111,14 @@ class FusionDataset:
         
         return [stacked_images, names] 
 
-def get_dataset(basedir = "../FusedDataset", size=512, levels=None):
+def get_dataset(basedir = "../FusedDataset", size=512, levels=None, n_patients=1):
 
-    dataset = FusionDataset(basedir=basedir, size=size, levels=levels)
+    dataset = FusionDataset(basedir=basedir, size=size, levels=levels, n_patients=n_patients)
 
     train_set, val_set = torch.utils.data.random_split(dataset, [int(len(dataset)*0.90), int(len(dataset)*0.1)+1])
+    print(f"Train set size: {len(train_set)}")
+    print(f"Validation set size: {len(val_set)}")
+    print(f"Test set size: {len(val_set)}")
     val_size = len(val_set)
     split_size = val_size // 2
     remainder = val_size % 2
