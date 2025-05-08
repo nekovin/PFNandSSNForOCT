@@ -31,6 +31,33 @@ def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
         t_img = torch.where(t_img < 0.01, torch.zeros_like(t_img), t_img)
     return t_img
 
+
+def threshold_flow_component(t_img: torch.Tensor, threshold: float = 0.01, bottom_percent: float = 0.2) -> torch.Tensor:
+    """
+    Creates a binary mask of the flow component with bottom portion blacked out.
+    
+    Args:
+        t_img (torch.Tensor): Input flow component tensor
+        threshold (float): Threshold value for binarization
+        bottom_percent (float): Percentage of image height to black out from bottom
+        
+    Returns:
+        torch.Tensor: Binary tensor with bottom portion set to zero
+    """
+    # Create binary threshold
+    binary_mask = (t_img > threshold).float()
+    
+    # Create mask for bottom portion
+    batch_size, channels, height, width = binary_mask.shape
+    bottom_pixels = int(height * bottom_percent)
+    
+    # Create a mask where bottom 20% is zero and rest is one
+    bottom_mask = torch.ones_like(binary_mask)
+    bottom_mask[:, :, -bottom_pixels:, :] = 0
+    
+    # Apply both masks
+    return binary_mask * bottom_mask
+
 def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha, scheduler):
     mode = 'train' if model.training else 'val'
     
@@ -42,11 +69,13 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
         if speckle_module is not None:
             flow_inputs = speckle_module(input_imgs)
             flow_inputs = flow_inputs['flow_component'].detach()
-            flow_inputs = normalize_image_torch(flow_inputs)
+            #flow_inputs = normalize_image_torch(flow_inputs)
+            flow_inputs = threshold_flow_component(flow_inputs, threshold=0.05)
             outputs = model(input_imgs)
             flow_outputs = speckle_module(outputs)
             flow_outputs = flow_outputs['flow_component'].detach()
-            flow_outputs = normalize_image_torch(flow_outputs)
+            #flow_outputs = normalize_image_torch(flow_outputs)
+            flow_outputs = threshold_flow_component(flow_outputs, threshold=0.05)
             flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
             
             loss = criterion(outputs, target_imgs) + flow_loss * alpha
@@ -70,7 +99,7 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
         if (batch_idx + 1) % 10 == 0:
             print(f"{mode.capitalize()} Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
 
-        if visualise and batch_idx == 0:
+        if visualise and batch_idx % 10 == 0:
             assert input_imgs[0][0].shape == (256, 256)
             assert target_imgs[0][0].shape == (256, 256)
             assert outputs[0][0].shape == (256, 256)
@@ -120,10 +149,11 @@ def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_ep
     start_time = time.time()
     for epoch in range(starting_epoch, starting_epoch+epochs):
         model.train()
-
+        visualise = False
         train_loss = process_batch(train_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha, scheduler)
 
         model.eval()
+        visualise = True
         with torch.no_grad():
             val_loss = process_batch(val_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha, scheduler)
 

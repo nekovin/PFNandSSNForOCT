@@ -3,7 +3,7 @@ from utils.evaluate import evaluate
 import torch
 from models.unet_2 import UNet2
 from models.unet import UNet
-from models.large_unet import LargeUNet
+from models.large_unet import LargeUNet, LargeUNetAttention
 
 def load_model(config, verbose=False):
     use_speckle = config['speckle_module']['use']
@@ -12,7 +12,11 @@ def load_model(config, verbose=False):
     method = eval_config['method']
     model = eval_config['model']
     if use_speckle:
-        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
+        best = config['speckle_module']['best']
+        if best:
+            checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
+        else:
+            checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_last_checkpoint.pth"
     else:
         checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
     
@@ -24,6 +28,8 @@ def load_model(config, verbose=False):
         model = UNet2(in_channels=1, out_channels=1).to(device)
     if model == "LargeUNet":
         model = LargeUNet(in_channels=1, out_channels=1).to(device)
+    if model == "LargeUNetAttention":
+        model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
 
     print(f"Loading model: {model}")
     print(f"Checkpoint path: {checkpoint_path}")
@@ -50,9 +56,15 @@ def load_checkpoint(config):
     method = eval_config['method']
     model = eval_config['model']
     if config['speckle_module']['use']:
-        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
+        best = config['speckle_module']['best']
+        if best:
+            checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
+        else:
+            checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_last_checkpoint.pth"
     else:
         checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
+    
+    print(f"Checkpoint path: {checkpoint_path}")
     
     device = eval_config['device']
     

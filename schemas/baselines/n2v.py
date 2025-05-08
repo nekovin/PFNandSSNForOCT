@@ -1181,7 +1181,7 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
     for epoch in range(starting_epoch, starting_epoch+epochs):
         model.train()
 
-        print(model)
+        #print(model)
 
         train_loss = process_batch_n2v(model, train_loader, criterion, mask_ratio,
             optimizer=optimizer, 

@@ -322,6 +322,7 @@ class OCTDataset(Dataset):
         self.target_images = []
         
         for patient_id, data in dataset_dict.items():
+            print(f"Processing patient {patient_id} with {len(data)} images")
             for i in range(len(data) - 1):  # Use consecutive pairs
                 input_image = data[i][0]  # First scan as input
                 target_image = data[i+1][0]  # Next scan as target
@@ -355,6 +356,50 @@ class OCTDataset(Dataset):
         return input_tensor, target_tensor
 
 def get_loaders(start, n_patients=2, n_images_per_patient=50, batch_size=8, 
+                val_split=0.2, shuffle=True, random_seed=42):
+
+    full_dataset = OCTDataset(start, n_patients=n_patients, n_images_per_patient=n_images_per_patient)
+    
+    dataset_size = len(full_dataset)
+    print(f"Dataset size: {dataset_size}")
+    val_size = int(val_split * dataset_size)
+    train_size = dataset_size - val_size
+    
+    random = False
+    if random:
+        train_dataset, val_dataset = torch.utils.data.random_split(
+            full_dataset, 
+            [train_size, val_size],
+            generator=torch.Generator().manual_seed(random_seed)
+        )
+    else:
+        train_dataset = torch.utils.data.Subset(
+            full_dataset, 
+            np.arange(train_size)
+        )
+
+        val_dataset = torch.utils.data.Subset(
+            full_dataset, 
+            np.arange(train_size, dataset_size)
+        )
+    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=shuffle, 
+        num_workers=0
+    )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=batch_size, 
+        shuffle=False, 
+        num_workers=0
+    )
+    
+    return train_loader, val_loader
+
+def get_train_loaders(start, n_patients=2, n_images_per_patient=50, batch_size=8, 
                 val_split=0.2, shuffle=True, random_seed=42):
 
     full_dataset = OCTDataset(start, n_patients=n_patients, n_images_per_patient=n_images_per_patient)

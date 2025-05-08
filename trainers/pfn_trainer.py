@@ -207,6 +207,8 @@ class Trainer:
         
         return sum(val_losses) / len(val_losses)
 
+from models.prog_custom import ProgLargeUNet
+
 def train_pfn(config_path):
     #model = create_progressive_fusion_dynamic_unet(base_features=32, use_fusion=True)
     img_size = 300
@@ -214,8 +216,15 @@ def train_pfn(config_path):
 
     config = get_config(config_path)
 
+    large = config['model']['large']
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = ProgUNet(in_channels=1, out_channels=1).to(device)
+    
+    if large:
+        model = ProgLargeUNet(in_channels=1, out_channels=1).to(device)
+
+    else:
+         model = ProgUNet(in_channels=1, out_channels=1).to(device)
     #model = load_prog_unet(config)
 
     train_config = config['train']

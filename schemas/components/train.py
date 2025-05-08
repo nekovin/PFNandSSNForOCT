@@ -1,10 +1,13 @@
 from utils.data_loading import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
-from models.large_unet import LargeUNet
+from models.large_unet import LargeUNet, LargeUNetAttention
+
+
 from models.ssm_attention import SpeckleSeparationUNetAttention
 import torch.optim as optim
 import torch
+
 from schemas.baselines.n2n import train_n2n
 from schemas.baselines.n2v import train_n2v
 from schemas.baselines.n2s import train_n2s
@@ -24,6 +27,7 @@ def train(config, method, ssm):
     start = train_config['start_patient'] if train_config['start_patient'] else 1
 
     train_loader, val_loader = get_loaders(start, n_patients, n_images_per_patient, batch_size)
+    #train_loader2, val_loader2 = get_loaders(37, 3, n_images_per_patient, batch_size)
 
     baselines_checkpoint_path = train_config['baselines_checkpoint_path']
 
@@ -48,6 +52,8 @@ def train(config, method, ssm):
         model = UNet2(in_channels=1, out_channels=1).to(device)
     elif train_config['model'] == 'LargeUNet':
         model = LargeUNet(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'LargeUNetAttention':
+        model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
@@ -96,8 +102,8 @@ def train(config, method, ssm):
         if method == "n2n":
             model = train_n2n(
                 model,
-                train_loader,
-                val_loader,
+                train_loader, 
+                val_loader, # bandaid
                 optimizer=optimizer,
                 criterion=train_config['criterion'],
                 starting_epoch=starting_epoch,
