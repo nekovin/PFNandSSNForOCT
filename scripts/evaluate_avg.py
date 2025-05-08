@@ -70,6 +70,7 @@ def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
     patients = os.listdir(dataset_path)
     
     print(f"Loading SDOCT dataset from {dataset_path}")
+    i = 0
     for patient in tqdm(patients, desc="Loading patients"):
         patient_path = os.path.join(dataset_path, patient)
         avg_path = os.path.join(patient_path, f"{patient}_Averaged Image.tif")
@@ -106,6 +107,10 @@ def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
                 "raw_np": raw_img,
                 "avg_np": avg_img
             }
+
+            i += 1
+            if i == 5:
+                sdoct_data
             
         except Exception as e:
             print(f"Error processing patient {patient}: {e}")
@@ -460,9 +465,12 @@ from utils.config import get_config
 from IPython.display import clear_output 
 
 def main(eval_override=None):
+    
     # Set device
 
     eval_config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\eval.yaml", eval_override)
+    sample = eval_config['eval']['sample']
+
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     
