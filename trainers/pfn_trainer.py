@@ -216,6 +216,8 @@ def train_pfn(config_path, override_dict):
 
     config = get_config(config_path, override_dict)
 
+    print(config)
+
     large = config['model']['large']
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -234,7 +236,8 @@ def train_pfn(config_path, override_dict):
     ablation_checkpoint_path = base_checkpoint_path + ablation
     if not os.path.exists(ablation_checkpoint_path):
          os.makedirs(ablation_checkpoint_path, exist_ok=True)
-    checkpoint_path = ablation_checkpoint_path + f"/prog_{model}"
+    checkpoint_path = ablation_checkpoint_path + f"/ProgUNet_{model}"
+    print(f"Checkpoint path: {checkpoint_path}")
 
     n_patients = train_config['n_patients']
 

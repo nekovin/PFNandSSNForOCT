@@ -32,6 +32,7 @@ def evaluate_progressssive_fusion_unet(image, reference, device, config_path=r"C
     if model_name == "ProgUNet":
         model = ProgUNet(in_channels=1, out_channels=1).to(device)
         checkpoint_path = base_checkpoint_path + f"{ablation}/{model}_best_checkpoint.pth"
+        print(f"Loading checkpoint from {checkpoint_path}")
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
