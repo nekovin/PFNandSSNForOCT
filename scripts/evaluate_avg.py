@@ -472,7 +472,7 @@ def main(eval_override=None):
     sample = eval_config['eval']['sample']
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Using device: {device}")
+    #print(f"Using device: {device}")
     
     sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
     dataset = load_sdoct_dataset(sdoct_path)
@@ -486,8 +486,13 @@ def main(eval_override=None):
         "original": dataset[first_patient]["raw_np"],
         "avg": dataset[first_patient]["avg_np"],
     }
-    
-    for patient_id, patient_data in tqdm(dataset.items(), desc="Evaluating patients"):
+
+    if eval_config['eval']['sample']:
+        # Process only the first patient
+        #print(f"Sampling single patient: {first_patient}")
+        patient_data = dataset[first_patient]
+        patient_id = first_patient
+        
         raw_image = patient_data["raw"].to(device)
         reference = patient_data["avg"].to(device)[0][0]
         
@@ -497,6 +502,7 @@ def main(eval_override=None):
             "original": patient_data["raw_np"],
             "avg": patient_data["avg_np"],
         }
+        
         n2_config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"
         try:
             metrics, denoised_images = evaluate_n2(metrics, denoised_images, n2_config_path, eval_override['n2_eval'], raw_image, reference)
@@ -511,19 +517,49 @@ def main(eval_override=None):
         
         metrics, denoised_images = evaluate_n2_with_ssm(metrics, denoised_images, n2_config_path, eval_override['n2_eval'], raw_image, reference)
         
-        # Save first patient's denoised images for visualization
-        if patient_id == first_patient:
-            visualization_images = denoised_images
+        visualization_images = denoised_images
         
-        # Aggregate metrics for overall statistics
+        # Store metrics for this patient
         for key, value in metrics.items():
-            if key not in all_patient_metrics:
-                all_patient_metrics[key] = []
-            all_patient_metrics[key].append(value)
+            all_patient_metrics[key] = [value]
+    else:
+        
+        for patient_id, patient_data in tqdm(dataset.items(), desc="Evaluating patients"):
+            raw_image = patient_data["raw"].to(device)
+            reference = patient_data["avg"].to(device)[0][0]
+            
+            # Initialize metrics for this patient
+            metrics = {}
+            denoised_images = {
+                "original": patient_data["raw_np"],
+                "avg": patient_data["avg_np"],
+            }
+            n2_config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml"
+            try:
+                metrics, denoised_images = evaluate_n2(metrics, denoised_images, n2_config_path, eval_override['n2_eval'], raw_image, reference)
+            except Exception as e:
+                raise e
+            
+            if not eval_config["exclude"]['pfn']:
+                pfn_config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml"
+                prog_metrics, prog_image = evaluate_progressssive_fusion_unet(raw_image, reference, device, pfn_config_path, eval_override['prog_config'])
+                metrics["pfn"] = prog_metrics
+                denoised_images["pfn"] = prog_image
+            
+            metrics, denoised_images = evaluate_n2_with_ssm(metrics, denoised_images, n2_config_path, eval_override['n2_eval'], raw_image, reference)
+            
+            # Save first patient's denoised images for visualization
+            if patient_id == first_patient:
+                visualization_images = denoised_images
+            
+            # Aggregate metrics for overall statistics
+            for key, value in metrics.items():
+                if key not in all_patient_metrics:
+                    all_patient_metrics[key] = []
+                all_patient_metrics[key].append(value)
 
         clear_output(wait=True)
     
-    # Save results to CSV
     metrics_df = pd.DataFrame([
         {"patient_id": patient_id, **{f"{k}_{m}": v for k, vals in all_patient_metrics.items() 
                                     for i, val in enumerate(vals) if i == idx 

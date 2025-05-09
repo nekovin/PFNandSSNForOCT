@@ -16,7 +16,7 @@ def evaluate_n2(metrics, denoised_images, config_path, eval_override, image=None
         if n2n_metrics is None:
             raise ValueError("Metrics for n2n are None")
         else:
-            print("Adding n2n metrics")
+            #print("Adding n2n metrics")
             metrics["n2n"] = n2n_metrics
             images.append(n2n_denoised)
             denoised_images['n2n'] = n2n_denoised
@@ -28,7 +28,7 @@ def evaluate_n2(metrics, denoised_images, config_path, eval_override, image=None
         if n2s_metrics is None:
             raise ValueError("Metrics for n2s are None")
         else:
-            print("Adding n2s metrics")
+            #print("Adding n2s metrics")
             metrics["n2s"] = n2s_metrics
             images.append(n2s_denoised)
             denoised_images['n2s'] = n2s_denoised
@@ -40,7 +40,7 @@ def evaluate_n2(metrics, denoised_images, config_path, eval_override, image=None
         if n2v_metrics is None:
             raise ValueError("Metrics for n2v are None")
         else:
-            print("Adding n2v metrics")
+            #print("Adding n2v metrics")
             metrics["n2v"] = n2v_metrics
             images.append(n2v_denoised)
             denoised_images['n2v'] = n2v_denoised
@@ -62,7 +62,7 @@ def evaluate_n2_with_ssm(metrics, denoised_images, config_path, eval_override, i
         if n2n_metrics is None:
             raise ValueError("Metrics for n2s are None")
         else:
-            print("Adding n2n metrics")
+            #print("Adding n2n metrics")
             metrics["n2n_ssm"] = n2n_metrics
             images.append(n2n_denoised)
             denoised_images['n2n_ssm'] = n2n_denoised
@@ -74,7 +74,7 @@ def evaluate_n2_with_ssm(metrics, denoised_images, config_path, eval_override, i
         if n2s_metrics is None:
             raise ValueError("Metrics for n2s are None")
         else:
-            print("Adding n2s metrics")
+            #print("Adding n2s metrics")
             metrics["n2s_ssm"] = n2s_metrics
             images.append(n2s_denoised)
             denoised_images['n2s_ssm'] = n2s_denoised
@@ -86,7 +86,7 @@ def evaluate_n2_with_ssm(metrics, denoised_images, config_path, eval_override, i
         if n2v_metrics is None:
             raise ValueError("Metrics for n2v are None")
         else:
-            print("Adding n2v metrics")
+            #print("Adding n2v metrics")
             metrics["n2v_ssm"] = n2v_metrics
             images.append(n2v_denoised)
             denoised_images['n2v_ssm'] = n2v_denoised

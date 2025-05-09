@@ -1,5 +1,6 @@
 from models.prog import create_progressive_fusion_dynamic_unet
 from models.prog_unet import ProgUNet
+from models.prog_custom import ProgLargeUNet
 from utils.postprocessing import normalize_image
 from utils.evaluate import evaluate_oct_denoising
 import matplotlib.pyplot as plt
@@ -28,10 +29,17 @@ def evaluate_progressssive_fusion_unet(image, reference, device, config_path=r"C
     ablation = eval_config['ablation']
     model_name = eval_config['model_name']
 
+    large = True #eval_config['large']
+
     #model = create_progressive_fusion_dynamic_unet().to(device)
     if model_name == "ProgUNet":
-        model = ProgUNet(in_channels=1, out_channels=1).to(device)
-        checkpoint_path = base_checkpoint_path + f"{ablation}/{model}_best_checkpoint.pth"
+        if large:
+            
+            model = ProgLargeUNet(in_channels=1, out_channels=1).to(device)
+            checkpoint_path = base_checkpoint_path + f"{ablation}/ProgUNet_{model}_best_checkpoint.pth"
+        else:
+            model = ProgUNet(in_channels=1, out_channels=1).to(device)
+            checkpoint_path = base_checkpoint_path + f"{ablation}/ProgUNet_{model}_best_checkpoint.pth"
         print(f"Loading checkpoint from {checkpoint_path}")
     else:
         raise ValueError(f"Unknown model name: {model_name}")
