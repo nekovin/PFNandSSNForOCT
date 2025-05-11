@@ -31,6 +31,25 @@ def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
         t_img = torch.where(t_img < 0.01, torch.zeros_like(t_img), t_img)
     return t_img
 
+def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
+    """
+    Normalise the input image tensor to [0, 1] range.
+    
+    Args:
+        t_img (torch.Tensor): Input image tensor.
+        
+    Returns:
+        torch.Tensor: The normalized image tensor.
+    """
+    min_val = t_img.min()
+    max_val = t_img.max()
+    
+    if max_val > min_val:
+        return (t_img - min_val) / (max_val - min_val)
+    else:
+        # If all values are the same, return zeros
+        return torch.zeros_like(t_img)
+
 
 def threshold_flow_component(t_img: torch.Tensor, threshold: float = 0.01, bottom_percent: float = 0.2) -> torch.Tensor:
     """
@@ -69,12 +88,12 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
         if speckle_module is not None:
             flow_inputs = speckle_module(input_imgs)
             flow_inputs = flow_inputs['flow_component'].detach()
-            #flow_inputs = normalize_image_torch(flow_inputs)
+            flow_inputs = normalize_image_torch(flow_inputs)
             #flow_inputs = threshold_flow_component(flow_inputs, threshold=0.05)
             outputs = model(input_imgs)
             flow_outputs = speckle_module(outputs)
             flow_outputs = flow_outputs['flow_component'].detach()
-            #flow_outputs = normalize_image_torch(flow_outputs)
+            flow_outputs = normalize_image_torch(flow_outputs)
             #flow_outputs = threshold_flow_component(flow_outputs, threshold=0.05)
             flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
             
