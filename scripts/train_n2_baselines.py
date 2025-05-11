@@ -21,8 +21,7 @@ def main(model):
         "training" : {
             "ablation": f"baselines/{patient_count}_patients",
             "n_images_per_patient": 40,
-            "n_patients" : patient_count,
-            "load" : True
+            "n_patients" : patient_count
             }
         }
 

@@ -31,8 +31,8 @@ def load_model(config, verbose=False):
     if model == "LargeUNetAttention":
         model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
 
-    print(f"Loading model: {model}")
-    print(f"Checkpoint path: {checkpoint_path}")
+    #print(f"Loading model: {model}")
+    #print(f"Checkpoint path: {checkpoint_path}")
     
     #checkpoint = torch.load(checkpoint_path, map_location=device)
     checkpoint = load_checkpoint(config)
@@ -66,7 +66,7 @@ def load_checkpoint(config):
     else:
         checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_best_checkpoint.pth"
     
-    print(f"Checkpoint path: {checkpoint_path}")
+    #print(f"Checkpoint path: {checkpoint_path}")
     
     device = eval_config['device']
     

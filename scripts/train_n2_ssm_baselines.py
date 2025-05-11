@@ -2,7 +2,7 @@ from trainers.n2n_trainer import train_n2n
 from trainers.n2v_trainer import train_n2v
 from trainers.n2s_trainer import train_n2s
 
-def main(args=None):
+def main(model):
 
     schemas = {
             'n2n': train_n2n,
@@ -10,11 +10,9 @@ def main(args=None):
             'n2s': train_n2s
         }
     
-    train_model=None
-    
-    if train_model is not None:
+    if model is not None:
         schemas = {
-            train_model : schemas[train_model]
+            model : schemas[model]
         }
 
     patient_count = 40
@@ -23,8 +21,7 @@ def main(args=None):
         "training" : {
             "ablation": f"baselines/{patient_count}_patients",
             "n_images_per_patient": 40,
-            "n_patients" : patient_count,
-            "load" : True
+            "n_patients" : patient_count
             }
         }
 

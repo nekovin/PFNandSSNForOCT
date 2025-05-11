@@ -59,6 +59,25 @@ def create_partition_masks(shape, n_partitions=2, device='cuda'):
     
     return partition_masks
 
+def create_random_partition_masks(shape, n_partitions=4, device='cuda'):
+    height, width = shape
+    all_indices = torch.arange(height * width, device=device)
+    shuffled = all_indices[torch.randperm(len(all_indices))]
+    
+    partition_size = len(all_indices) // n_partitions
+    masks = []
+    
+    for i in range(n_partitions):
+        start_idx = i * partition_size
+        end_idx = start_idx + partition_size if i < n_partitions - 1 else len(all_indices)
+        
+        mask = torch.zeros(height * width, device=device)
+        mask[shuffled[start_idx:end_idx]] = 1
+        mask = mask.reshape(height, width)
+        masks.append(mask)
+    
+    return masks
+
 def _process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
     mode = 'train' if model.training else 'val'
     
@@ -151,40 +170,47 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
     
     scaler = GradScaler() if mode == 'train' else None
     
-    partition_masks = create_partition_masks((256, 256), n_partitions=4, device=device)
+    # Standard N2S uses 2 partitions
+    #partition_masks = create_partition_masks((256, 256), n_partitions=4, device=device)
+    partition_masks = create_random_partition_masks((256, 256), n_partitions=8, device=device)
+    
     
     for batch_idx, (input_imgs, _) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
 
         with autocast():
             total_loss = 0
-            outputs = None
+            final_output = torch.zeros_like(input_imgs)
             
             for p in range(len(partition_masks)):
                 curr_mask = partition_masks[p].unsqueeze(0).unsqueeze(0).expand_as(input_imgs)
                 comp_mask = 1 - curr_mask
                 
+                # Mask current partition pixels for input
                 masked_input = input_imgs * comp_mask
+                
+                # Predict only the masked pixels
                 curr_outputs = model(masked_input)
                 
-                if p == 0:
-                    outputs = curr_outputs
+                # Accumulate predictions for final output
+                final_output += curr_outputs * curr_mask
                 
+                # Calculate loss only for current partition
                 pred = curr_outputs * curr_mask
                 target = input_imgs * curr_mask
                 loss = criterion(pred, target)
                 total_loss += loss
             
+            # Average loss across partitions
             loss = total_loss / len(partition_masks)
 
-            full_output = model(input_imgs)
-            
-            if speckle_module is not None and outputs is not None:
+            # SSM loss if enabled
+            if speckle_module is not None:
                 flow_inputs = speckle_module(input_imgs)
                 flow_inputs = flow_inputs['flow_component'].detach()
                 flow_inputs = normalize_image_torch(flow_inputs)
                 
-                flow_outputs = speckle_module(full_output)
+                flow_outputs = speckle_module(final_output)
                 flow_outputs = flow_outputs['flow_component'].detach()
                 flow_outputs = normalize_image_torch(flow_outputs)
                 
@@ -203,17 +229,15 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
         
         epoch_loss += loss.item()
 
-        if (batch_idx + 1) % 10 == 0:
-            print(f"N2S {mode.capitalize()} Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
-
-        if visualise and batch_idx == 0 and outputs is not None:
+        if visualise and batch_idx == 0:
+            # Use final_output for visualization, not the partial outputs
             if speckle_module is not None:
                 titles = ['Input Image', 'Flow Input', 'Flow Output', 'Output Image']
                 images = [
                     input_imgs[0][0].cpu().numpy(),
                     flow_inputs[0][0].cpu().detach().numpy(),
                     flow_outputs[0][0].cpu().detach().numpy(),
-                    full_output[0][0].cpu().detach().numpy()
+                    final_output[0][0].cpu().detach().numpy()
                 ]
                 losses = {
                     'N2S Loss': loss.item() - (flow_loss.item() * alpha if speckle_module else 0),
@@ -224,7 +248,7 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
                 titles = ['Input Image', 'Output Image']
                 images = [
                     input_imgs[0][0].cpu().numpy(),
-                    full_output[0][0].cpu().detach().numpy()
+                    final_output[0][0].cpu().detach().numpy()
                 ]
                 losses = {'Total Loss': loss.item()}
                 

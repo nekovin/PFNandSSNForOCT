@@ -96,7 +96,7 @@ def get_config(config_path, override_args=None):
         dict: Parsed configuration with any overridden values
     """
     with open(config_path, 'r') as file:
-        print(f"Loading configuration from {config_path}")
+        #print(f"Loading configuration from {config_path}")
         config = yaml.safe_load(file)
     
     return parse_config(config, override_args)

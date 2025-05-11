@@ -286,7 +286,7 @@ def evaluate_oct_denoising(original, denoised, reference=None):
 
     metrics = {}
 
-    print(original.shape, denoised.shape, reference.shape)
+    #print(original.shape, denoised.shape, reference.shape)
     #print(original.device, denoised.device, reference.device)
     
     metrics['psnr'] = calculate_psnr(denoised, reference)

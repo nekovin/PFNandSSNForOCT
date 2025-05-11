@@ -1,62 +1,81 @@
-from trainers.n2n_trainer import train_n2n
-from trainers.n2v_trainer import train_n2v
-from trainers.n2s_trainer import train_n2s
-from trainers.ssm_trainer import train_ssm
-from trainers.pfn_trainer import train_pfn
+def main():
+    import matplotlib.pyplot as plt
+    from evaluation.evaluate_n2_baselines import evaluate_baseline, evaluate_ssm_constraint
+    from evaluation.evaluate_pfn import evaluate_progressssive_fusion_unet
+    from utils.evaluate import load_sdoct_dataset
+    from tqdm import tqdm
+    import torch
 
-schemas = {
-    'n2n': train_n2n,
-    'n2v': train_n2v,
-    'n2s': train_n2s,
-    'ssm': train_ssm,
-    'pfn': train_pfn,
-}
-
-schema = list(schemas.keys())[2]
-print(schema)
-
-patient_count = 1
-
-override_dict = {
-    "training" : {
-        "ablation": f"patient_count/{patient_count}_patients",
-        "n_images_per_patient": 20,
-        "n_patients" : 1,
-        "load" : False
-        }
+    override_config = {
+        "1" : ""
     }
 
-train_n2_base = False
-train_ssm_base = False
-train_proposed = False
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
-if train_n2_base:
-    schemas[schema](r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", False, override_dict)
-if train_ssm_base:
-    schemas[schema](r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", True, override_dict)
+    sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
+    dataset = load_sdoct_dataset(sdoct_path)
 
-prog_override_dict = {
-    "train" : {
-        "ablation": f"patient_count/{patient_count}_patients",
-        "n_patients" : 1,
-        "load" : False
-        }
-    }
+    for patient_id, patient_data in tqdm(dataset.items(), desc="Evaluating patients"):
+        raw_image = patient_data["raw"].to(device)
+        reference = patient_data["avg"].to(device)[0][0]
+        break
 
-override_dict['eval'] = override_dict['training']
-prog_override_dict['eval'] = prog_override_dict['train']
 
-schema = list(schemas.keys())[4]
-if train_proposed:
-    schemas[schema](r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml", override_dict)
+    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    ax[0].imshow(raw_image.cpu().numpy()[0][0], cmap="gray")
+    ax[0].set_title("Raw Image")
+    ax[1].imshow(reference.cpu().numpy(), cmap="gray")
+    ax[1].set_title("Reference Image")
+    plt.show()
 
-from scripts.evaluate_avg import main
 
-patient_count = 1
+    n2n_metrics, n2n_denoised = evaluate_baseline(raw_image, reference, "n2n")
+    n2n_ssm_metrics, n2n_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2n")
 
-eval_override = {
-    "prog_config": prog_override_dict,
-    "n2_eval": override_dict,
-}
+    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    ax[0].imshow(n2n_denoised, cmap="gray")
+    ax[0].set_title("N2N Denoised")
+    ax[1].imshow(n2n_ssm_denoised, cmap="gray")
+    ax[1].set_title("N2N SSM Denoised")
+    plt.show()
 
-main(eval_override)
+    n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, "n2v")
+    n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2v")
+
+
+    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    ax[0].imshow(n2v_denoised, cmap="gray")
+    ax[0].set_title("N2V Denoised")
+    ax[1].imshow(n2v_ssm_denoised, cmap="gray")
+    ax[1].set_title("N2V SSM Denoised")
+    plt.show()
+
+
+    n2s_metrics, n2s_denoised = evaluate_baseline(raw_image, reference, "n2s")
+    n2s_ssm_metrics, n2s_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2s")
+    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    ax[0].imshow(n2s_denoised, cmap="gray")
+    ax[0].set_title("N2S Denoised")
+    ax[1].imshow(n2s_ssm_denoised, cmap="gray")
+    ax[1].set_title("N2S SSM Denoised")
+    plt.show()
+
+    prog_metrics, prog_image = evaluate_progressssive_fusion_unet(raw_image, reference, device)
+
+    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+
+    ax[0].imshow(prog_image, cmap="gray")
+
+    ax[0].set_title("Progressive Fusion Denoised")  
+    plt.show()
+
+    print("N2N Metrics: ", n2n_metrics)
+    print("N2N SSM Metrics: ", n2n_ssm_metrics)
+    print("N2V Metrics: ", n2v_metrics)
+    print("N2V SSM Metrics: ", n2v_ssm_metrics)
+    print("N2S Metrics: ", n2s_metrics)
+    print("N2S SSM Metrics: ", n2s_ssm_metrics)
+    print("Progressive Fusion Metrics: ", prog_metrics)
+
+if __name__ == "__main__":
+    main()
