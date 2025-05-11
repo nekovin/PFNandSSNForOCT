@@ -63,7 +63,6 @@ def main():
     ax[1].set_title("N2V SSM Denoised")
     plt.show()
 
-
     n2s_metrics, n2s_denoised = evaluate_baseline(raw_image, reference, "n2s")
     n2s_ssm_metrics, n2s_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2s")
     metrics = {}

@@ -15,7 +15,7 @@ def main(model):
             model : schemas[model]
         }
 
-    patient_count = 40
+    patient_count = 5
 
     override_dict = {
         "training" : {

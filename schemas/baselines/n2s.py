@@ -9,6 +9,8 @@ from models.unet_2 import UNet2
 from utils.visualise import plot_images, plot_computation_graph
 from tqdm import tqdm
 
+from tqdm.notebook import tqdm as tqdm_notebook
+
 def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
     """
     Normalise the input image tensor.
@@ -175,7 +177,7 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
     partition_masks = create_random_partition_masks((256, 256), n_partitions=8, device=device)
     
     
-    for batch_idx, (input_imgs, _) in enumerate(data_loader):
+    for batch_idx, (input_imgs, _) in enumerate(tqdm(data_loader)):
         input_imgs = input_imgs.to(device)
 
         with autocast():
@@ -288,16 +290,13 @@ def process_batch_n2s_with_clean_inference(data_loader, model, criterion, optimi
     
     partition_masks = create_random_partition_masks((256, 256), n_partitions=8, device=device)
     
-    for batch_idx, (input_imgs, _) in enumerate(data_loader):
+    for batch_idx, (input_imgs, _) in tqdm_notebook(enumerate(data_loader)):
         input_imgs = input_imgs.to(device)
         
-        # Every 10 batches, do a clean inference training step
         if mode == 'train' and batch_idx % 10 == 0:
             with autocast():
-                # Train on clean inference (no masking)
                 clean_output = model(input_imgs)
                 
-                # Calculate self-consistency loss with partitioned output
                 final_output = torch.zeros_like(input_imgs)
                 for p in range(len(partition_masks)):
                     curr_mask = partition_masks[p].unsqueeze(0).unsqueeze(0).expand_as(input_imgs)
@@ -305,8 +304,7 @@ def process_batch_n2s_with_clean_inference(data_loader, model, criterion, optimi
                     masked_input = input_imgs * comp_mask
                     curr_outputs = model(masked_input)
                     final_output += curr_outputs * curr_mask
-                
-                # Consistency loss between clean and partitioned outputs
+
                 consistency_loss = criterion(clean_output, final_output.detach())
                 
                 optimizer.zero_grad()
@@ -318,7 +316,6 @@ def process_batch_n2s_with_clean_inference(data_loader, model, criterion, optimi
                     consistency_loss.backward()
                     optimizer.step()
         
-        # Regular N2S training
         with autocast():
             total_loss = 0
             final_output = torch.zeros_like(input_imgs)
@@ -337,7 +334,6 @@ def process_batch_n2s_with_clean_inference(data_loader, model, criterion, optimi
             
             loss = total_loss / len(partition_masks)
             
-            # Add SSM loss if enabled
             if speckle_module is not None:
                 flow_inputs = speckle_module(input_imgs)['flow_component'].detach()
                 flow_inputs = normalize_image_torch(flow_inputs)
@@ -387,9 +383,8 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
 
     start_time = time.time()
 
-    for epoch in tqdm(range(starting_epoch, starting_epoch+epochs)):
+    for epoch in tqdm_notebook(range(starting_epoch, starting_epoch+epochs)):
         model.train()
-
         #train_loss = process_batch_n2s(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
         train_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
         

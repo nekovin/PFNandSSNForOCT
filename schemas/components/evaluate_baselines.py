@@ -51,7 +51,7 @@ def load_model(config, verbose=False):
         print(f"Model loaded successfully")
     return model
 
-def load_checkpoint(config):
+def load_checkpoint(config, last=False):
     eval_config = config['eval']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
     ablation = eval_config['ablation']
@@ -64,7 +64,11 @@ def load_checkpoint(config):
         else:
             checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_last_checkpoint.pth"
     else:
-        checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_best_checkpoint.pth"
+        if last:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_last_checkpoint.pth"
+        else:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_best_checkpoint.pth"
+    print(f"Checkpoint path: {checkpoint_path}")
     
     #print(f"Checkpoint path: {checkpoint_path}")
     
@@ -74,7 +78,7 @@ def load_checkpoint(config):
     
     return checkpoint
 
-def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_config = None):
+def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_config = None, last=False):
     
     config = get_config(config_path, override_config)
     
@@ -89,7 +93,7 @@ def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\O
         return None, None
 
     model = load_model(config, verbose)
-    checkpoint = load_checkpoint(config)
+    checkpoint = load_checkpoint(config, last)
     
     metrics, denoised = evaluate(image, reference, model, method)
 
@@ -99,7 +103,7 @@ def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\O
 
     return metrics, denoised
 
-def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_dict = None):
+def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_dict = None, last=False):
     
     config = get_config(config_path, override_dict)
 
