@@ -924,6 +924,25 @@ def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
         t_img = torch.where(t_img < 0.01, torch.zeros_like(t_img), t_img)
     return t_img
 
+def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
+    """
+    Normalise the input image tensor to [0, 1] range.
+    
+    Args:
+        t_img (torch.Tensor): Input image tensor.
+        
+    Returns:
+        torch.Tensor: The normalized image tensor.
+    """
+    min_val = t_img.min()
+    max_val = t_img.max()
+    
+    if max_val > min_val:
+        return (t_img - min_val) / (max_val - min_val)
+    else:
+        # If all values are the same, return zeros
+        return torch.zeros_like(t_img)
+
 def create_blind_spot_mask(batch_size, channels, height, width, device, blind_spot_ratio=0.1):
     mask = torch.ones((batch_size, channels, height, width), device=device)
     

@@ -256,6 +256,25 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
 
     return epoch_loss / len(data_loader)
 
+def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
+    """
+    Normalise the input image tensor to [0, 1] range.
+    
+    Args:
+        t_img (torch.Tensor): Input image tensor.
+        
+    Returns:
+        torch.Tensor: The normalized image tensor.
+    """
+    min_val = t_img.min()
+    max_val = t_img.max()
+    
+    if max_val > min_val:
+        return (t_img - min_val) / (max_val - min_val)
+    else:
+        # If all values are the same, return zeros
+        return torch.zeros_like(t_img)
+
 def process_batch_n2s_with_clean_inference(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
     """
     N2S training with periodic clean inference training
