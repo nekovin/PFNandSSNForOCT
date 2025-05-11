@@ -465,24 +465,15 @@ from utils.config import get_config
 from IPython.display import clear_output 
 
 def main(eval_override=None):
-
-    if eval_override is None:
-        eval_override = {
-            'prog_config': {
-                '': '',
-            },
-            'n2_eval': {
-                '': '',
-            }
-        }
+    
+    # Set device
 
     eval_config = get_config(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\eval.yaml", eval_override)
-
-    print(eval_config)
     sample = eval_config['eval']['sample']
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-
+    #print(f"Using device: {device}")
+    
     sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
     dataset = load_sdoct_dataset(sdoct_path)
     
@@ -516,7 +507,6 @@ def main(eval_override=None):
         try:
             metrics, denoised_images = evaluate_n2(metrics, denoised_images, n2_config_path, eval_override['n2_eval'], raw_image, reference)
         except Exception as e:
-            print(f"Error evaluating N2: {e}")
             raise e
         
         if not eval_config["exclude"]['pfn']:

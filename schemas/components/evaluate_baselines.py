@@ -90,13 +90,11 @@ def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\O
 
     model = load_model(config, verbose)
     checkpoint = load_checkpoint(config)
-     
-
+    
     metrics, denoised = evaluate(image, reference, model, method)
 
     metrics['epochs'] = checkpoint['epoch']
     metrics['loss'] = checkpoint['best_val_loss']
-    #metrics['model'] = str(model.__class__.__name__)
     metrics['model'] = str(model)
 
     return metrics, denoised
@@ -120,7 +118,6 @@ def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\C
 
     metrics['epochs'] = checkpoint['epoch']
     metrics['loss'] = checkpoint['best_val_loss']
-    #metrics['model'] = model.__class__.__name__
     metrics['model'] = str(model)
 
     return metrics, denoised

@@ -12,6 +12,7 @@ def evaluate_n2(metrics, denoised_images, config_path, eval_override, image=None
         
     images = []
     try:
+        print("Evaluating n2n")
         n2n_metrics, n2n_denoised = evaluate_baseline(image, reference, "n2n", config_path, eval_override)
         if n2n_metrics is None:
             raise ValueError("Metrics for n2n are None")
