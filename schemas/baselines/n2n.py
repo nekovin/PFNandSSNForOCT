@@ -70,12 +70,12 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
             flow_inputs = speckle_module(input_imgs)
             flow_inputs = flow_inputs['flow_component'].detach()
             #flow_inputs = normalize_image_torch(flow_inputs)
-            flow_inputs = threshold_flow_component(flow_inputs, threshold=0.05)
+            #flow_inputs = threshold_flow_component(flow_inputs, threshold=0.05)
             outputs = model(input_imgs)
             flow_outputs = speckle_module(outputs)
             flow_outputs = flow_outputs['flow_component'].detach()
             #flow_outputs = normalize_image_torch(flow_outputs)
-            flow_outputs = threshold_flow_component(flow_outputs, threshold=0.05)
+            #flow_outputs = threshold_flow_component(flow_outputs, threshold=0.05)
             flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
             
             loss = criterion(outputs, target_imgs) + flow_loss * alpha

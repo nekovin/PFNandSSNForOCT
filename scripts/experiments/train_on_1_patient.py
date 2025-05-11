@@ -12,21 +12,20 @@ schemas = {
     'pfn': train_pfn,
 }
 
-schema = list(schemas.keys())[1] # change here
+schema = list(schemas.keys())[2]
 print(schema)
 
-patient_count = 40
+patient_count = 1
 
 override_dict = {
     "training" : {
         "ablation": f"patient_count/{patient_count}_patients",
         "n_images_per_patient": 20,
-        "n_patients" : patient_count,
-        "load" : True
+        "n_patients" : 1
         }
     }
 
-train_n2_base = True
+train_n2_base = False
 train_ssm_base = False
 train_proposed = False
 
@@ -38,15 +37,25 @@ if train_ssm_base:
 prog_override_dict = {
     "train" : {
         "ablation": f"patient_count/{patient_count}_patients",
-        "n_patients" : patient_count,
+        "n_patients" : 1,
         "load" : False
         }
     }
 
-
 override_dict['eval'] = override_dict['training']
-prog_override_dict['evaluation'] = prog_override_dict['train']
+prog_override_dict['eval'] = prog_override_dict['train']
 
 schema = list(schemas.keys())[4]
 if train_proposed:
-    schemas[schema](r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml", prog_override_dict)
+    schemas[schema](r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\pfn_config.yaml", override_dict)
+
+from scripts.evaluate_avg import main
+
+patient_count = 1
+
+eval_override = {
+    "prog_config": prog_override_dict,
+    "n2_eval": override_dict,
+}
+
+main(eval_override)

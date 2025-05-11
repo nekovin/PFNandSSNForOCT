@@ -1,12 +1,5 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import numpy as np
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-from torch.utils.data import DataLoader, TensorDataset
-import os 
 import sys
 sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\src")
 
@@ -55,21 +48,9 @@ class SpeckleSeparationModule(nn.Module):
         )
     
     def forward(self, x):
-        """
-        Forward pass of the Speckle Separation Module
-        
-        Args:
-            x: Input OCT image tensor of shape [B, C, H, W]
-            
-        Returns:
-            Dictionary containing:
-                - 'flow_component': Flow-related speckle component
-                - 'noise_component': Noise-related speckle component
-        """
-        # Extract features
+
         features = self.feature_extraction(x)
         
-        # Separate into flow and noise components
         flow_component = self.flow_branch(features)
         noise_component = self.noise_branch(features)
         
@@ -256,7 +237,6 @@ class SpeckleSeparationUNetAttention(nn.Module):
             
             in_channels = out_channels
         
-        # Bottleneck
         bottleneck_channels = feature_dim * (2**min(depth, 3))
         bottleneck = []
         for _ in range(block_depth + 1):  # Slightly deeper bottleneck
@@ -331,7 +311,9 @@ class SpeckleSeparationUNetAttention(nn.Module):
             nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
             nn.BatchNorm2d(feature_dim),
             nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, input_channels, kernel_size=1)
+            nn.Conv2d(feature_dim, input_channels, kernel_size=1),
+            #nn.Sigmoid() 
+            nn.ReLU()
         )
         
         self.noise_branch = nn.Sequential(
@@ -351,18 +333,7 @@ class SpeckleSeparationUNetAttention(nn.Module):
         return f"SpeckleSeparationUNetAttention(input_channels={self.input_channels}, feature_dim={self.feature_dim}, depth={self.depth}, block_depth={self.block_depth})"
 
     def forward(self, x):
-        """
-        Forward pass of the Speckle Separation U-Net
-        
-        Args:
-            x: Input OCT image tensor of shape [B, C, H, W]
-            
-        Returns:
-            Dictionary containing:
-                - 'flow_component': Flow-related speckle component
-                - 'noise_component': Noise-related speckle component
-        """
-        # Store encoder outputs for skip connections
+
         encoder_features = []
         
         # Encoder path with attention
@@ -395,6 +366,9 @@ class SpeckleSeparationUNetAttention(nn.Module):
         # Generate flow and noise components
         flow_component = self.flow_branch(x)
         noise_component = self.noise_branch(x)
+
+        #flow_component = normalize_image_torch(flow_component)
+        #noise_component = normalize_image_torch(noise_component)
         
         return {
             'flow_component': flow_component,
@@ -421,3 +395,94 @@ def get_ssm_model(input_channels=1, feature_dim=32, depth=5, block_depth=3, chec
         model.load_state_dict(checkpoint['model_state_dict'])
 
     return model
+
+def normalize_image(np_img):
+    np_img = np_img.copy()
+    if np_img.max() > 0:
+        # Create mask of non-background pixels
+        foreground_mask = np_img > 0.01
+        if foreground_mask.any():
+            # Get min/max of only foreground pixels
+            fg_min = np_img[foreground_mask].min()
+            fg_max = np_img[foreground_mask].max()
+            
+            # Normalize only foreground pixels to [0,1] range
+            if fg_max > fg_min:
+                np_img[foreground_mask] = (np_img[foreground_mask] - fg_min) / (fg_max - fg_min)
+    
+    # Force background to be true black
+    np_img[np_img < 0.01] = 0
+    return np_img
+
+def normalize_image_torch(img_tensor):
+    """
+    Normalize image tensor while maintaining gradient flow
+    img_tensor: tensor of shape [B, C, H, W]
+    """
+    batch_size, channels = img_tensor.shape[:2]
+    normalized = torch.zeros_like(img_tensor)
+    
+    for b in range(batch_size):
+        for c in range(channels):
+            single_img = img_tensor[b, c]
+            
+            # Create foreground mask
+            foreground_mask = single_img > 0.01
+            
+            if foreground_mask.any():
+                # Get min/max of foreground pixels
+                fg_pixels = single_img[foreground_mask]
+                fg_min = fg_pixels.min()
+                fg_max = fg_pixels.max()
+                
+                # Normalize foreground pixels
+                if fg_max > fg_min:
+                    # Create normalized copy
+                    normalized_img = single_img.clone()
+                    normalized_img[foreground_mask] = (fg_pixels - fg_min) / (fg_max - fg_min)
+                    
+                    # Force background to zero
+                    normalized_img[~foreground_mask] = 0
+                    normalized[b, c] = normalized_img
+                else:
+                    # If all foreground pixels have same value, just zero the background
+                    normalized_img = single_img.clone()
+                    normalized_img[~foreground_mask] = 0
+                    normalized[b, c] = normalized_img
+            else:
+                # No foreground pixels, entire image is background
+                normalized[b, c] = torch.zeros_like(single_img)
+    
+    return normalized
+
+def normalize_image_torch_vectorized(img_tensor):
+    """
+    Vectorized version for better performance
+    img_tensor: tensor of shape [B, C, H, W]
+    """
+    # Flatten spatial dimensions for easier processing
+    batch_size, channels = img_tensor.shape[:2]
+    flat_shape = img_tensor.shape[:2] + (-1,)
+    flat_img = img_tensor.view(flat_shape)
+    
+    # Create foreground mask
+    foreground_mask = flat_img > 0.01
+    
+    # Initialize output
+    normalized = torch.zeros_like(flat_img)
+    
+    for b in range(batch_size):
+        for c in range(channels):
+            mask = foreground_mask[b, c]
+            if mask.any():
+                fg_pixels = flat_img[b, c, mask]
+                fg_min = fg_pixels.min()
+                fg_max = fg_pixels.max()
+                
+                if fg_max > fg_min:
+                    normalized[b, c, mask] = (fg_pixels - fg_min) / (fg_max - fg_min)
+                else:
+                    normalized[b, c, mask] = fg_pixels
+    
+    # Reshape back to original dimensions
+    return normalized.view(img_tensor.shape)

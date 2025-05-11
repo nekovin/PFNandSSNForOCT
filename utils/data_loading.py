@@ -275,14 +275,20 @@ def remove_speckle_noise(image, min_size=5):
 def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
     
     dataset = {}
+
+    diabetes = 0
+    
     try:
         for i in range(start, start+n_patients):
-            data = load_patient_data(rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})")
+            if diabetes != 0:
+                data_path = rf"C:\Datasets\ICIP training data\ICIP training data\{diabetes}\RawDataQA-{diabetes} ({i})"
+            else:
+                data_path = rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})"
+            print(f"Processing patient {i}")
+            data = load_patient_data(data_path)
             assert len(data) > 0, f"No data found for patient {i}"
             
             preprocessed_data = standard_preprocessing(data)
-
-            
 
             octa_data = octa_preprocessing(preprocessed_data, n_neighbours, threshold)
             

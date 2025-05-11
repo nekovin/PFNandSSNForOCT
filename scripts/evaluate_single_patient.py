@@ -1,14 +1,19 @@
+import matplotlib.pyplot as plt
+from evaluation.evaluate_n2_baselines import evaluate_baseline, evaluate_ssm_constraint
+from evaluation.evaluate_pfn import evaluate_progressssive_fusion_unet
+from utils.evaluate import load_sdoct_dataset
+from tqdm import tqdm
+import torch
+from utils.metrics import display_metrics, display_grouped_metrics
+
 def main():
-    import matplotlib.pyplot as plt
-    from evaluation.evaluate_n2_baselines import evaluate_baseline, evaluate_ssm_constraint
-    from evaluation.evaluate_pfn import evaluate_progressssive_fusion_unet
-    from utils.evaluate import load_sdoct_dataset
-    from tqdm import tqdm
-    import torch
+    
 
     override_config = {
         "1" : ""
     }
+
+    all_metrics = {}
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -20,7 +25,6 @@ def main():
         reference = patient_data["avg"].to(device)[0][0]
         break
 
-
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     ax[0].imshow(raw_image.cpu().numpy()[0][0], cmap="gray")
     ax[0].set_title("Raw Image")
@@ -28,10 +32,15 @@ def main():
     ax[1].set_title("Reference Image")
     plt.show()
 
-
+    
     n2n_metrics, n2n_denoised = evaluate_baseline(raw_image, reference, "n2n")
     n2n_ssm_metrics, n2n_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2n")
-
+    metrics = {}
+    metrics['n2n'] = n2n_metrics
+    metrics['n2n_ssm'] = n2n_ssm_metrics
+    all_metrics['n2n'] = n2n_metrics
+    all_metrics['n2n_ssm'] = n2n_ssm_metrics
+    display_metrics(metrics)
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     ax[0].imshow(n2n_denoised, cmap="gray")
     ax[0].set_title("N2N Denoised")
@@ -41,8 +50,12 @@ def main():
 
     n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, "n2v")
     n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2v")
-
-
+    metrics = {}
+    metrics['n2v'] = n2v_metrics
+    metrics['n2v_ssm'] = n2v_ssm_metrics
+    all_metrics['n2v'] = n2v_metrics
+    all_metrics['n2v_ssm'] = n2v_ssm_metrics
+    display_metrics(metrics)
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     ax[0].imshow(n2v_denoised, cmap="gray")
     ax[0].set_title("N2V Denoised")
@@ -53,6 +66,12 @@ def main():
 
     n2s_metrics, n2s_denoised = evaluate_baseline(raw_image, reference, "n2s")
     n2s_ssm_metrics, n2s_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2s")
+    metrics = {}
+    metrics['n2s'] = n2s_metrics
+    metrics['n2s_ssm'] = n2s_ssm_metrics
+    all_metrics['n2s'] = n2s_metrics
+    all_metrics['n2s_ssm'] = n2s_ssm_metrics
+    display_metrics(metrics)
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     ax[0].imshow(n2s_denoised, cmap="gray")
     ax[0].set_title("N2S Denoised")
@@ -62,20 +81,23 @@ def main():
 
     prog_metrics, prog_image = evaluate_progressssive_fusion_unet(raw_image, reference, device)
 
+    metrics = {}
+    metrics['pfn'] = prog_metrics
+    display_grouped_metrics(metrics)
+
+    all_metrics['pfn'] = prog_metrics
+
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
 
     ax[0].imshow(prog_image, cmap="gray")
 
     ax[0].set_title("Progressive Fusion Denoised")  
     plt.show()
+    
+    display_grouped_metrics(all_metrics)
+    display_metrics(all_metrics)
 
-    print("N2N Metrics: ", n2n_metrics)
-    print("N2N SSM Metrics: ", n2n_ssm_metrics)
-    print("N2V Metrics: ", n2v_metrics)
-    print("N2V SSM Metrics: ", n2v_ssm_metrics)
-    print("N2S Metrics: ", n2s_metrics)
-    print("N2S SSM Metrics: ", n2s_ssm_metrics)
-    print("Progressive Fusion Metrics: ", prog_metrics)
+    
 
 if __name__ == "__main__":
     main()

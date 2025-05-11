@@ -31,42 +31,41 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
     running_flow_loss = 0.0
     running_noise_loss = 0.0
     
-    # Determine if we're in training or validation mode
     is_training = mode == 'train'
     
     progress_bar = tqdm(dataloader, desc=f"{mode.capitalize()} Epoch {epoch+1}/{num_epochs}")
     print(f"{mode.capitalize()}...")
     
     for batch_inputs, batch_targets in progress_bar:
-        # Set model mode appropriately
         if is_training:
             model.train()
         else:
             model.eval()
         
-        # Only zero gradients during training
         if is_training and optimizer:
             optimizer.zero_grad()
             
-        # Create masked inputs for N2V
-        mask = torch.rand_like(batch_inputs) > 0.9  # Mask ~10% of pixels
-        masked_inputs = batch_inputs.clone()
+        #mask = torch.rand_like(batch_inputs) > 0.9  # mask ~10% of pixels
+        #masked_inputs = batch_inputs.clone()
         
-        if fast:
-            roll_amount = torch.randint(-5, 5, (2,))
-            shifted = torch.roll(batch_inputs, shifts=(roll_amount[0].item(), roll_amount[1].item()), dims=(2, 3))
-            masked_inputs[mask] = shifted[mask]
-        else: # proper masking
-            masked_inputs = subset_blind_spot_masking(batch_inputs, mask, kernel_size=5)[0]
+        #if fast:
+            #roll_amount = torch.randint(-5, 5, (2,))
+            #shifted = torch.roll(batch_inputs, shifts=(roll_amount[0].item(), roll_amount[1].item()), dims=(2, 3))
+            #masked_inputs[mask] = shifted[mask]
+        #else: # proper masking
+            #masked_inputs = subset_blind_spot_masking(batch_inputs, mask, kernel_size=5)[0]
 
-        # Forward pass
         with torch.set_grad_enabled(is_training):
-            outputs = model(masked_inputs)
+            #outputs = model(masked_inputs)
+            print(batch_inputs.shape)
+            
+            outputs = model(batch_inputs)
+
+            #outputs = model(batch_inputs)
             flow_component = outputs['flow_component']
             noise_component = outputs['noise_component']
 
-            mse = nn.MSELoss(reduction='none')
-            n2v_loss = mse(flow_component[mask], batch_targets[mask]).mean()
+            #n2v_loss = mse(flow_component[mask], batch_targets[mask]).mean()
             
             if loss_fn:
                 total_loss = loss_fn(
@@ -76,9 +75,11 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
                     batch_targets, 
                     loss_parameters=loss_parameters, 
                     debug=debug)
-                total_loss = total_loss + n2v_loss * n2v_weight
-            else:
-                total_loss = n2v_loss * n2v_weight
+                #total_loss = total_loss + n2v_loss * n2v_weight
+            
+            #else:
+                #total_loss = n2v_loss * n2v_weight
+
 
         if is_training and optimizer:
             # Debug parameter changes before step (first epoch only)
@@ -129,7 +130,8 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
             model, 
             batch_inputs[random_idx:random_idx+1], 
             batch_targets[random_idx:random_idx+1], 
-            masked_tensor=masked_inputs[random_idx:random_idx+1][0][0].cpu().numpy(), 
+            #masked_tensor=masked_inputs[random_idx:random_idx+1][0][0].cpu().numpy(), 
+            masked_tensor=None,
             epoch=epoch+1
         )
         plt.close()
@@ -177,16 +179,13 @@ def train(train_dataloader, val_dataloader, checkpoint, checkpoint_path, model, 
             mode='val'
         )
         
-        # Store validation loss in history
         history['val_loss'].append(val_loss)
         
-        # Check if this is the best model so far
         if val_loss < best_loss:
             best_loss = val_loss
             best_epoch = epoch + 1
             print(f"New best model found at epoch {best_epoch} with validation loss {best_loss:.6f}")
             
-            # Save best model checkpoint
             checkpoint = {
                 'epoch': best_epoch,
                 'model_state_dict': model.state_dict(),
@@ -240,8 +239,11 @@ def get_loaders(dataset, batch_size, val_split=0.2, device='cuda', seed=42):
             target_tensors.append(target_tensor)
     
     # Stack all tensors
-    inputs = torch.stack(input_tensors).to(device)
-    targets = torch.stack(target_tensors).to(device)
+    #inputs = torch.stack(input_tensors).to(device)
+    #targets = torch.stack(target_tensors).to(device)
+
+    inputs = torch.stack(input_tensors).permute(0, 3, 1, 2).to(device)
+    targets = torch.stack(target_tensors).permute(0, 3, 1, 2).to(device)
     
     full_dataset = TensorDataset(inputs, targets)
 
@@ -270,7 +272,7 @@ def get_loaders(dataset, batch_size, val_split=0.2, device='cuda', seed=42):
     
 
 
-def train_speckle_separation_module_n2n(train_config, loss_fn, loss_name):
+def train_speckle_separation_module(train_config, loss_fn, loss_name):
 
     device = train_config['device']
 
@@ -279,6 +281,8 @@ def train_speckle_separation_module_n2n(train_config, loss_fn, loss_name):
     start = train_config['start']
 
     dataset = preprocessing_v2(start, n_patients, 50, n_neighbours = 10, threshold=65, sample=False, post_process_size=10)
+
+    print(f"Dataset size: {len(dataset)} patients")
 
     batch_size = train_config['batch_size']
     
@@ -362,7 +366,7 @@ def train_ssm():
     else:
         loss_fn = custom_loss
 
-    train_speckle_separation_module_n2n(config['training'], loss_fn, loss_name)
+    train_speckle_separation_module(config['training'], loss_fn, loss_name)
 
     #from ssm.models.ssm_attention import get_ssm_model
     #from torchviz import make_dot

@@ -89,6 +89,4 @@ def evaluate_single_image():
     display_grouped_metrics(metrics)
     
     plot_images(denoised_images, metrics_df)
-
-if __name__ == "__main__":
-    main()
+    

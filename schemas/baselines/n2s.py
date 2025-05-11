@@ -256,6 +256,106 @@ def process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, d
 
     return epoch_loss / len(data_loader)
 
+def process_batch_n2s_with_clean_inference(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
+    """
+    N2S training with periodic clean inference training
+    """
+    from torch.cuda.amp import autocast, GradScaler
+    
+    mode = 'train' if model.training else 'val'
+    epoch_loss = 0
+    
+    scaler = GradScaler() if mode == 'train' else None
+    
+    partition_masks = create_random_partition_masks((256, 256), n_partitions=8, device=device)
+    
+    for batch_idx, (input_imgs, _) in enumerate(data_loader):
+        input_imgs = input_imgs.to(device)
+        
+        # Every 10 batches, do a clean inference training step
+        if mode == 'train' and batch_idx % 10 == 0:
+            with autocast():
+                # Train on clean inference (no masking)
+                clean_output = model(input_imgs)
+                
+                # Calculate self-consistency loss with partitioned output
+                final_output = torch.zeros_like(input_imgs)
+                for p in range(len(partition_masks)):
+                    curr_mask = partition_masks[p].unsqueeze(0).unsqueeze(0).expand_as(input_imgs)
+                    comp_mask = 1 - curr_mask
+                    masked_input = input_imgs * comp_mask
+                    curr_outputs = model(masked_input)
+                    final_output += curr_outputs * curr_mask
+                
+                # Consistency loss between clean and partitioned outputs
+                consistency_loss = criterion(clean_output, final_output.detach())
+                
+                optimizer.zero_grad()
+                if scaler is not None:
+                    scaler.scale(consistency_loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    consistency_loss.backward()
+                    optimizer.step()
+        
+        # Regular N2S training
+        with autocast():
+            total_loss = 0
+            final_output = torch.zeros_like(input_imgs)
+            
+            for p in range(len(partition_masks)):
+                curr_mask = partition_masks[p].unsqueeze(0).unsqueeze(0).expand_as(input_imgs)
+                comp_mask = 1 - curr_mask
+                masked_input = input_imgs * comp_mask
+                curr_outputs = model(masked_input)
+                final_output += curr_outputs * curr_mask
+                
+                pred = curr_outputs * curr_mask
+                target = input_imgs * curr_mask
+                loss = criterion(pred, target)
+                total_loss += loss
+            
+            loss = total_loss / len(partition_masks)
+            
+            # Add SSM loss if enabled
+            if speckle_module is not None:
+                flow_inputs = speckle_module(input_imgs)['flow_component'].detach()
+                flow_inputs = normalize_image_torch(flow_inputs)
+                flow_outputs = speckle_module(final_output)['flow_component'].detach()
+                flow_outputs = normalize_image_torch(flow_outputs)
+                flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                loss = loss + flow_loss * alpha
+        
+        if mode == 'train':
+            optimizer.zero_grad()
+            if scaler is not None:
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
+        
+        epoch_loss += loss.item()
+        
+        # Visualization with clean output comparison
+        if visualise and batch_idx == 0:
+            clean_output = model(input_imgs)
+            
+            titles = ['Input', 'N2S Output', 'Clean Output', 'Clean vs N2S']
+            images = [
+                input_imgs[0][0].cpu().numpy(),
+                final_output[0][0].cpu().detach().numpy(),
+                clean_output[0][0].cpu().detach().numpy(),
+                (clean_output[0][0] - final_output[0][0]).abs().cpu().detach().numpy()
+            ]
+            
+            losses = {'Total Loss': loss.item()}
+            plot_images(images, titles, losses)
+    
+    return epoch_loss / len(data_loader)
+
 
 def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
@@ -271,11 +371,13 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
     for epoch in tqdm(range(starting_epoch, starting_epoch+epochs)):
         model.train()
 
-        train_loss = process_batch_n2s(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+        #train_loss = process_batch_n2s(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+        train_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
         
         model.eval()
         with torch.no_grad():
-            val_loss = process_batch_n2s(val_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+            #val_loss = process_batch_n2s(val_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+            val_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
 
         print(f"Epoch [{starting_epoch+epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
         

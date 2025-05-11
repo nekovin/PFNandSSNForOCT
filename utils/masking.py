@@ -123,60 +123,40 @@ def blind_spot_masking_fast(tensor, mask, kernel_size=5):
 
 
 def subset_blind_spot_masking(tensor, mask_ratio=0.1, kernel_size=5):
-    """
-    Apply blind spot masking to only a subset of pixels for faster training
-    
-    Args:
-        tensor: Input tensor of shape [B, C, H, W]
-        mask_ratio: Fraction of pixels to mask (between 0 and 1)
-        kernel_size: Size of neighborhood kernel
-    
-    Returns:
-        masked_tensor: Tensor with masked pixels filled with neighborhood values
-        mask: Boolean mask showing which pixels were masked
-    """
+
     device = tensor.device
     b, c, h, w = tensor.shape
     masked_tensor = tensor.clone()
     half_k = kernel_size // 2
     
-    # Create random mask (True = pixels to be masked)
     mask = torch.rand(b, c, h, w, device=device) < mask_ratio
     
-    # Use unfold to extract local neighborhoods efficiently
     padded = torch.nn.functional.pad(tensor, (half_k, half_k, half_k, half_k), mode='reflect')
     neighborhoods = padded.unfold(2, kernel_size, 1).unfold(3, kernel_size, 1)
     
-    # Create mask for neighborhood (excluding center pixel)
     center_mask = torch.ones((kernel_size, kernel_size), dtype=torch.bool, device=device)
     center_mask[half_k, half_k] = False
     
     for bi in range(b):
         for ci in range(c):
-            # Get coordinates of masked pixels
             y_coords, x_coords = torch.where(mask[bi, ci])
             
             if len(y_coords) == 0:
                 continue
             
-            # Process in batches to avoid OOM
             batch_size = 10000
             for i in range(0, len(y_coords), batch_size):
                 y_batch = y_coords[i:i+batch_size]
                 x_batch = x_coords[i:i+batch_size]
                 batch_len = len(y_batch)
                 
-                # Get neighborhoods for all masked pixels in batch
-                pixel_neighborhoods = neighborhoods[bi, ci, y_batch, x_batch]  # [batch_size, kernel_size, kernel_size]
+                pixel_neighborhoods = neighborhoods[bi, ci, y_batch, x_batch]
                 
-                # Apply center mask to each neighborhood
                 masked_neighborhoods = pixel_neighborhoods.reshape(batch_len, -1)[:, center_mask.reshape(-1)]
                 
-                # For each masked pixel, select a random value from its valid neighbors
                 rand_indices = torch.randint(0, masked_neighborhoods.shape[1], (batch_len,), device=device)
                 selected_values = masked_neighborhoods[torch.arange(batch_len, device=device), rand_indices]
                 
-                # Assign the selected values
                 masked_tensor[bi, ci, y_batch, x_batch] = selected_values
     
     return masked_tensor, mask

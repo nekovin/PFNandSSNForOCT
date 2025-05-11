@@ -66,8 +66,15 @@ def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch)
     #axes[1, 2].set_title("Denoised (Input - Noise)")
     #axes[1, 2].axis('off')
 
-    axes[1, 2].imshow(masked_tensor, cmap='gray')
-    axes[1, 2].set_title("Masked Tensor")
+    #axes[1, 2].imshow(masked_tensor, cmap='gray')
+    #axes[1, 2].set_title("Masked Tensor")
+    #axes[1, 2].axis('off')
+
+    if masked_tensor is not None:
+        axes[1, 2].imshow(masked_tensor, cmap='gray')
+        axes[1, 2].set_title("Masked Tensor")
+    else:
+        axes[1, 2].set_title("No Masked Tensor")
     axes[1, 2].axis('off')
 
     flow_np = normalize_image(flow_np)
