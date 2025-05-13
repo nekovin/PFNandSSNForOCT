@@ -2,6 +2,7 @@ from ssm.utils.data_utils.standard_preprocessing import standard_preprocessing
 from ssm.utils.data_utils.oct_preprocessing import octa_preprocessing, remove_speckle_noise
 from ssm.utils.data_utils.data_loading  import load_patient_data
 import os
+import re
 
 def pair_data(preprocessed_data, octa_data, n_images_per_patient):
     n_neighbours = (len(preprocessed_data) - len(octa_data)) // 2
@@ -52,36 +53,93 @@ def paired_octa_preprocessing(start=1, n_patients=1, n_images_per_patient=10, n_
     except Exception as e:
         print(f"Error in preprocessing: {e}")
         return None
-
-def paired_preprocessing(start=1, n_patients=1, sample=False):
+    
+def _paired_preprocessing(start=1, n_patients=1, diabetes_list=[0,1,2], sample=False):
     """
     Preprocess OCT images without OCTA calculation, maintaining paired structure.
     """
     dataset = {}
-    diabetes = 0
     base_data_path = os.environ["DATASET_DIR_PATH"]
     
     try:
-        for i in range(start, start+n_patients):
-            if diabetes != 0:
-                data_path = base_data_path + rf"{diabetes}\RawDataQA-{diabetes} ({i})"
-            else:
-                data_path = base_data_path + rf"0\RawDataQA ({i})"
-            print(f"Processing patient {i}")
-            data = load_patient_data(data_path)
-            print(f"Loaded {len(data)} images for patient {i}")
-            assert len(data) > 0, f"No data found for patient {i}"
+        for diabetes in diabetes_list:
+            for i in range(start, start+n_patients):
+                if diabetes != 0:
+                    data_path = base_data_path + rf"{diabetes}\RawDataQA-{diabetes} ({i})"
+                else:
+                    data_path = base_data_path + rf"0\RawDataQA ({i})"
+                print(f"Processing patient {i}")
+                data = load_patient_data(data_path)
+                print(f"Loaded {len(data)} images for patient {i}")
+                assert len(data) > 0, f"No data found for patient {i}"
+                
+                preprocessed_data = standard_preprocessing(data)
+                
+                input_target = []
+                for j in range(len(preprocessed_data)-1):
+                    image1 = preprocessed_data[j]
+                    image2 = preprocessed_data[j+1]
+                    input_target.append([image1, image2])
+                
+                dataset[i] = input_target
             
-            preprocessed_data = standard_preprocessing(data)
+        return dataset
+    
+    except Exception as e:
+        print(f"Error in preprocessing: {e}")
+        return None
+
+
+
+def extract_number(filename):
+    match = re.search(r'\((\d+)\)', filename)
+    if match:
+        return int(match.group(1))
+    return 0 
+
+def paired_preprocessing(start=1, n_patients=1, diabetes_list=[0,1,2], sample=False):
+    """
+    Preprocess OCT images without OCTA calculation, maintaining paired structure.
+    """
+    dataset = {}
+    base_data_path = os.environ["DATASET_DIR_PATH"]
+    
+    patient_count = 0  # Counter for total patients processed
+    try:
+        for diabetes in diabetes_list:
+            diabetes_path = os.path.join(base_data_path, f"{diabetes}")
+            patient_dirs = sorted(os.listdir(diabetes_path), key=extract_number)
+            sorted_patients = [os.path.join(diabetes_path, patient) for patient in patient_dirs]
             
-            input_target = []
-            for j in range(len(preprocessed_data)-1):
-                image1 = preprocessed_data[j]
-                image2 = preprocessed_data[j+1]
-                input_target.append([image1, image2])
+            # Process patients from this diabetes group
+            for i, patient_path in enumerate(sorted_patients, start):
+                # Skip patients before the start index
+                if i < start:
+                    continue
+                    
+                # Break if we've processed enough patients
+                if patient_count >= n_patients:
+                    break
+                    
+                data = load_patient_data(patient_path)
+                print(f"Loaded {len(data)} images for patient {i}")
+                assert len(data) > 0, f"No data found for patient {i}"
+                
+                preprocessed_data = standard_preprocessing(data)
+                
+                input_target = []
+                for j in range(len(preprocessed_data)-1):
+                    image1 = preprocessed_data[j]
+                    image2 = preprocessed_data[j+1]
+                    input_target.append([image1, image2])
+                
+                dataset[i] = input_target
+                patient_count += 1  # Increment our patient counter
             
-            dataset[i] = input_target
-            
+            # Break out of diabetes loop if we've processed enough patients
+            if patient_count >= n_patients:
+                break
+                
         return dataset
     
     except Exception as e:

@@ -12,7 +12,6 @@ def low_signal_constraint_loss(output, low_signal_mask):
         return penalty
 
 def compute_cnr_loss(output):
-    '''Untraditional computation of CNR'''
     # https://howradiologyworks.com/x-ray-cnr/
     sobel_x = torch.tensor([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]], device=output.device).float().view(1, 1, 3, 3)
     sobel_y = torch.tensor([[-1, -2, -1], [0, 0, 0], [1, 2, 1]], device=output.device).float().view(1, 1, 3, 3)
@@ -35,19 +34,11 @@ def compute_cnr_loss(output):
     return cnr #+ 0.5 * low_contrast_penalty
 
 def compute_loss(output, target, fusion_weights=None): # evil loss function
-    """Compute total loss with focus on CNR, SSIM, and MSE"""
-
-    '''Plan is to make this dynamic based on the fusion level'''
-    
-    # mse
     mse = mse_loss(output, target)
     
-    # ssim
     ssim_loss = 1 - ssim(output, target) 
     
-    cnr_loss = compute_cnr_loss(output) #-torch.abs(mean_signal - mean_background) / (std_background + 1e-6)
-    
-    #total_loss = 1 * mse + 0.5 * ssim_loss + 0.05 * cnr_loss
+    cnr_loss = compute_cnr_loss(output)
     
     total_loss = mse + ssim_loss + cnr_loss*0.01
 

@@ -6,11 +6,12 @@ from torch.utils.data import Dataset, DataLoader
 from ssm.utils import paired_preprocessing
 
 class PairedOCTDataset(Dataset):
-    def __init__(self, start, n_patients=2, n_images_per_patient=50, transform=None):
+    def __init__(self, start, n_patients=2, n_images_per_patient=50, transform=None, diabetes_list=[0,1,2]):
+        
         self.transform = transform
         
         #dataset_dict = paired_preprocessing(start, n_patients, n_images_per_patient, n_neighbours=2)
-        dataset_dict = paired_preprocessing(start, n_patients)
+        dataset_dict = paired_preprocessing(start, n_patients, diabetes_list=diabetes_list)
         
         self.input_images = []
         self.target_images = []
@@ -33,16 +34,13 @@ class PairedOCTDataset(Dataset):
         input_img = self.input_images[idx]
         target_img = self.target_images[idx]
         
-        # Add channel dimension if needed
         if len(input_img.shape) == 2:
             input_img = input_img[:, :, np.newaxis]
             target_img = target_img[:, :, np.newaxis]
         
-        # Convert to PyTorch tensors
         input_tensor = torch.from_numpy(input_img.transpose(2, 0, 1)).float()
         target_tensor = torch.from_numpy(target_img.transpose(2, 0, 1)).float()
         
-        # Apply transformations if any
         if self.transform:
             input_tensor = self.transform(input_tensor)
             target_tensor = self.transform(target_tensor)
