@@ -1,6 +1,9 @@
 
 # Honours
 
+## Requirements
+pip install -e .
+
 ## File Structure
 scripts/
 main.py begins process from initial data to final result
