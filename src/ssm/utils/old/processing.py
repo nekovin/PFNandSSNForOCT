@@ -1,4 +1,5 @@
 
+
 def threshold_octa(octa, method='adaptive', threshold_percentage=0.1):
     """
     Threshold OCTA image to remove low-intensity noise

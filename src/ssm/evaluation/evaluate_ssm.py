@@ -1,16 +1,11 @@
 import torch
-from losses.ssm_loss import custom_loss
-from visualise import plot_images
-
-from data_loading import get_loaders
-
-import torch
+from ssm.losses import custom_loss
+from ssm.utils import plot_images
+from ssm.data import get_paired_loaders
 from ssm.losses.ssm_loss import custom_loss
-from visualise import plot_images
-
-from data_loading import get_loaders
-from ssm.models.ssm_attention import get_ssm_model
-from ssm.postprocessing.postprocessing import normalize_image
+from ssm.models import get_ssm_model
+from ssm.utils import normalize_image
+import torch
 
 
 def evaluate2(train_config):

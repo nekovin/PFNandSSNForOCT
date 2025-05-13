@@ -1,11 +1,7 @@
-from models.unet.prog import create_progressive_fusion_dynamic_unet
-from models.unet.prog_unet import ProgUNet
-from models.unet.prog_custom import ProgLargeUNet
-from utils.postprocessing import normalize_image
-from ssm.utils.eval_utils.evaluate import evaluate_oct_denoising
+from ssm.models import create_progressive_fusion_dynamic_unet, ProgUNet, ProgLargeUNet
+from ssm.utils import evaluate_oct_denoising, normalize_image, get_config
 import matplotlib.pyplot as plt
 import torch
-from ssm.utils.config import get_config
 
 def denoise_image(model, image, device):
     model.eval()

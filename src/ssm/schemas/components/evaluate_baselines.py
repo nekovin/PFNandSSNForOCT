@@ -1,9 +1,7 @@
 from ssm.utils.config import get_config
 from ssm.utils.eval_utils.evaluate import evaluate
 import torch
-from models.unet_2 import UNet2
-from models.unet import UNet
-from models.unet.large_unet import LargeUNet, LargeUNetAttention
+from ssm.models import UNet, UNet2, LargeUNet, LargeUNetAttention
 
 def load_model(config, verbose=False, last=False):
     use_speckle = config['speckle_module']['use']

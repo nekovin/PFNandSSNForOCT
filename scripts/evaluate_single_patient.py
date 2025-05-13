@@ -1,14 +1,11 @@
 import matplotlib.pyplot as plt
-from evaluation.evaluate_n2_baselines import evaluate_baseline, evaluate_ssm_constraint
-from evaluation.evaluate_pfn import evaluate_progressssive_fusion_unet
-from utils.evaluate import load_sdoct_dataset
+from ssm.evaluation import evaluate_baseline, evaluate_ssm_constraint, evaluate_progressssive_fusion_unet
+from ssm.utils import load_sdoct_dataset, display_metrics, display_grouped_metrics
 from tqdm import tqdm
 import torch
-from utils.metrics import display_metrics, display_grouped_metrics
 
 def main():
     
-
     override_config = {
         "1" : ""
     }

@@ -1,13 +1,14 @@
-from schemas.components.evaluate_baselines import evaluate_baseline, evaluate_ssm_constraint
-from ssm.utils.eval_utils.evaluate_utils import get_sample_image
-from schemas.data.dataset import get_loaders
+from ssm.schemas.components.evaluate_baselines import evaluate_baseline, evaluate_ssm_constraint
+from ssm.utils import get_sample_image
+from ssm.data import get_paired_loaders
+
 import torch
 
 def evaluate_n2(metrics, denoised_images, config_path, eval_override, image=None, reference=None, device = "cuda" if torch.cuda.is_available() else "cpu"):
 
     if image is None:
 
-        train_loader, val_loader = get_loaders(15, 1, 50, 8)
+        train_loader, val_loader = get_paired_loaders(15, 1, 50, 8)
         image = get_sample_image(val_loader, device)
         
     images = []
@@ -54,7 +55,7 @@ def evaluate_n2_with_ssm(metrics, denoised_images, config_path, eval_override, i
 
     if image is None:
 
-        train_loader, val_loader = get_loaders(15, 1, 50, 8)
+        train_loader, val_loader = get_paired_loaders(15, 1, 50, 8)
         image = get_sample_image(val_loader, device)
 
     images = []

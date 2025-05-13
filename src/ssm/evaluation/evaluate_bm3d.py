@@ -1,12 +1,12 @@
 
-from schemas.baselines.bm3d import BM3D_Step1, BM3D_Step2
+from ssm.schemas import BM3D_Step1, BM3D_Step2
+from ssm.data import get_paired_loaders
 import numpy as np
-from schemas.data.dataset import get_loaders
 import matplotlib.pyplot as plt
 
 
 def main():
-    train_loader, val_loader = get_loaders()
+    train_loader, val_loader = get_paired_loaders()
 
     sample = next(iter(train_loader))
 
