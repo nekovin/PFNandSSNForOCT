@@ -58,5 +58,6 @@ noise2void
 
 utils/old
 schemas/phf
-*/old/
+old/*
 configs
+src/ssm/old
