@@ -1,4 +1,4 @@
-from utils.data_loading import get_loaders
+from utils.data import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
 from models.large_unet import LargeUNet, LargeUNetAttention

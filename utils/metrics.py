@@ -6,7 +6,7 @@ import torch
 import os
 import time
 import matplotlib.pyplot as plt
-from utils.data_loading import preprocessing_v2
+from utils.data import preprocessing_v2
 
 def calculate_psnr(img1, img2, max_value=1.0):
 

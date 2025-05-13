@@ -5,7 +5,7 @@ from models.unet_2 import UNet2
 from models.unet import UNet
 from models.large_unet import LargeUNet, LargeUNetAttention
 
-def load_model(config, verbose=False):
+def load_model(config, verbose=False, last=False):
     use_speckle = config['speckle_module']['use']
     eval_config = config['eval']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
@@ -19,6 +19,8 @@ def load_model(config, verbose=False):
             checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_last_checkpoint.pth"
     else:
         checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
+
+    
     
     device = eval_config['device']
     
@@ -35,7 +37,7 @@ def load_model(config, verbose=False):
     #print(f"Checkpoint path: {checkpoint_path}")
     
     #checkpoint = torch.load(checkpoint_path, map_location=device)
-    checkpoint = load_checkpoint(config)
+    checkpoint = load_checkpoint(config, last=last)
     model.load_state_dict(checkpoint['model_state_dict'])
 
     if verbose:
@@ -49,7 +51,7 @@ def load_model(config, verbose=False):
             if key == 'best_val_loss':
                 print(f"Loss: {value}")
         print(f"Model loaded successfully")
-    return model
+    return model, checkpoint
 
 def load_checkpoint(config, last=False):
     eval_config = config['eval']
@@ -62,6 +64,8 @@ def load_checkpoint(config, last=False):
         if best:
             checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_best_checkpoint.pth"
         else:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_last_checkpoint.pth"
+        if last:
             checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_last_checkpoint.pth"
     else:
         if last:
@@ -92,8 +96,8 @@ def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\O
         print(f"Method {method} is excluded from evaluation.")
         return None, None
 
-    model = load_model(config, verbose)
-    checkpoint = load_checkpoint(config, last)
+    model, checkpoint = load_model(config, verbose, last=last)
+    #checkpoint = load_checkpoint(config, last=last)
     
     metrics, denoised = evaluate(image, reference, model, method)
 
@@ -115,8 +119,8 @@ def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\C
     config['eval']['method'] = method
     verbose = config['eval']['verbose']
 
-    model = load_model(config, verbose)
-    checkpoint = load_checkpoint(config)
+    model, checkpoint = load_model(config, verbose, last=last)
+    #checkpoint = load_checkpoint(config)
 
     metrics, denoised = evaluate(image, reference, model, method)
 

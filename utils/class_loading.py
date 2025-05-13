@@ -3,7 +3,7 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import random
 from sklearn.model_selection import train_test_split
-from data_loading import preprocessing_v2
+from utils.data import preprocessing_v2
 
 
 class OCTDataset(Dataset):

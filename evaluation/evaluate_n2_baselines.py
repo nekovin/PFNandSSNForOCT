@@ -1,6 +1,6 @@
 from schemas.components.evaluate_baselines import evaluate_baseline, evaluate_ssm_constraint
 from utils.evaluate import get_sample_image
-from utils.data_loading import get_loaders
+from utils.data import get_loaders
 import torch
 
 def evaluate_n2(metrics, denoised_images, config_path, eval_override, image=None, reference=None, device = "cuda" if torch.cuda.is_available() else "cpu"):
