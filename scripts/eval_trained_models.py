@@ -1,5 +1,5 @@
 from utils.evaluate import get_sample_image
-from utils.data import get_loaders
+from schemas.components.dataset import get_loaders
 import torch
 from utils.metrics import display_metrics, display_grouped_metrics
 

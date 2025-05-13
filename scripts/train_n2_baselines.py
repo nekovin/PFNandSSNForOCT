@@ -1,6 +1,4 @@
-from trainers.n2n_trainer import train_n2n
-from trainers.n2v_trainer import train_n2v
-from trainers.n2s_trainer import train_n2s
+from trainers.n2_trainer import train_n2n, train_n2v, train_n2s
 
 def main(model):
 
@@ -15,7 +13,7 @@ def main(model):
             model : schemas[model]
         }
 
-    patient_count = 40
+    patient_count = 5
 
     override_dict = {
         "training" : {

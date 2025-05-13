@@ -3,7 +3,7 @@ import time
 import os
 import torch
 import numpy as np
-from utils.data import get_loaders
+from schemas.components.dataset import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
 from utils.visualise import plot_images, plot_computation_graph

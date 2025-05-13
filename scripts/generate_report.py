@@ -11,8 +11,6 @@ def main():
     parser.add_argument('--output-dir', required=True)
     args = parser.parse_args()
     
-    # This is where you'd normally load your results
-    # For now we'll just create a placeholder
     results = {
         "experiment_name": args.experiment_name,
         "model_type": args.model_type,
@@ -28,8 +26,7 @@ def main():
             # Add your model parameters here
         }
     }
-    
-    # Save JSON results
+
     os.makedirs(args.output_dir, exist_ok=True)
     with open(f"{args.output_dir}/results.json", "w") as f:
         json.dump(results, f, indent=2)

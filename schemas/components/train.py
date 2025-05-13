@@ -1,17 +1,17 @@
-from utils.data import get_loaders
+from schemas.components.dataset import get_loaders
 from models.unet import UNet
 from models.unet_2 import UNet2
 from models.large_unet import LargeUNet, LargeUNetAttention
 
-
 from models.ssm_attention import SpeckleSeparationUNetAttention
-import torch.optim as optim
-import torch
+
 
 from schemas.baselines.n2n import train_n2n
 from schemas.baselines.n2v import train_n2v
 from schemas.baselines.n2s import train_n2s
 import os
+import torch.optim as optim
+import torch
 
 def train(config, method, ssm):
 

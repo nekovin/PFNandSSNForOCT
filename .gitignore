@@ -57,3 +57,6 @@ noise2void
 
 *.npz
 *.json
+
+utils/old
+schemas/phf

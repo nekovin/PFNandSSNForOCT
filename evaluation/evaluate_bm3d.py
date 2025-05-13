@@ -1,7 +1,7 @@
 
 from schemas.baselines.bm3d import BM3D_Step1, BM3D_Step2
 import numpy as np
-from utils.data import get_loaders
+from schemas.components.dataset import get_loaders
 import matplotlib.pyplot as plt
 
 

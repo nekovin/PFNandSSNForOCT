@@ -17,7 +17,7 @@ from losses.ssm_loss import custom_loss
 import numpy as np
 from torch.utils.data import random_split
 
-from utils.data import preprocessing_v2
+from utils.standard_preprocessing import preprocessing_v2
 from utils.visualise_ssm import visualize_progress
 from utils.visualise_ssm import visualize_attention_maps
 from utils.masking import subset_blind_spot_masking
