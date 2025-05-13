@@ -3,21 +3,14 @@ import torch
 from skimage import io
 from torch.utils.data import Dataset, DataLoader
 
-from ssm.utils import preprocessing_v2
+from ssm.utils import paired_preprocessing
 
 class PairedOCTDataset(Dataset):
     def __init__(self, start, n_patients=2, n_images_per_patient=50, transform=None):
-        """
-        Dataset class for OCT images
-        
-        Args:
-            n_patients: Number of patients to include
-            n_images_per_patient: Maximum number of images per patient
-            transform: Optional transforms to apply
-        """
         self.transform = transform
         
-        dataset_dict = preprocessing_v2(start, n_patients, n_images_per_patient, n_neighbours=2)
+        #dataset_dict = paired_preprocessing(start, n_patients, n_images_per_patient, n_neighbours=2)
+        dataset_dict = paired_preprocessing(start, n_patients)
         
         self.input_images = []
         self.target_images = []

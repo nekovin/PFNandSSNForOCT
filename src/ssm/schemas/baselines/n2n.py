@@ -2,7 +2,6 @@
 import time
 import torch
 from ssm.utils.eval_utils.visualise import plot_images
-from tqdm import tqdm
     
 def normalize_image_torch(t_img: torch.Tensor) -> torch.Tensor:
     """

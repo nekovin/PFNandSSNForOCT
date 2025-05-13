@@ -4,7 +4,7 @@ import numpy as np
 from skimage import io
 
 def load_patient_data(base_path, verbose=False):
-
+    
     if verbose:
         print(f"Loading data from: {base_path}")
     

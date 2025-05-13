@@ -15,7 +15,7 @@ from ssm.losses.ssm_loss import custom_loss
 import numpy as np
 from torch.utils.data import random_split
 
-from ssm.utils import preprocessing_v2, visualize_progress, visualize_attention_maps, subset_blind_spot_masking
+from ssm.utils import paired_preprocessing, visualize_progress, visualize_attention_maps, subset_blind_spot_masking
 from ssm.utils.config import get_config
 
 def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):

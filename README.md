@@ -33,6 +33,8 @@ https://github.com/Sudhandar/ResNet-50-model
 
 ## Background
 
+# SSM
+## Preprocessing
 ## Training
 
 Before training, configure the config.yaml files with training content.
@@ -44,7 +46,10 @@ py trainers/n2v_trainer.py
 py trainers/pfn_trainer.py
 py trainers/ssm_trainer.py
 ```
+# PFN
+## Preprocessing
+## Training
+py trainers/pfn_trainer.py
 
-## Evaluation
-
+# Evaluation
 py scripts/eval_trained_models.py

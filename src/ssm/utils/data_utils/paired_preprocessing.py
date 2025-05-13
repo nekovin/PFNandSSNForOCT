@@ -1,15 +1,13 @@
 from ssm.utils.data_utils.standard_preprocessing import standard_preprocessing
 from ssm.utils.data_utils.oct_preprocessing import octa_preprocessing, remove_speckle_noise
 from ssm.utils.data_utils.data_loading  import load_patient_data
+import os
 
 def pair_data(preprocessed_data, octa_data, n_images_per_patient):
-    # Calculate the offset due to n_neighbours
     n_neighbours = (len(preprocessed_data) - len(octa_data)) // 2
     
     input_target = []
     for i in range(len(octa_data)):
-        # Match each octa image with its corresponding OCT image
-        # The octa at index i corresponds to the preprocessed at index i+n_neighbours
         oct_image = preprocessed_data[i + n_neighbours]
         octa_image = octa_data[i]
         input_target.append([oct_image, octa_image])
@@ -19,18 +17,19 @@ def pair_data(preprocessed_data, octa_data, n_images_per_patient):
             
     return input_target
 
-def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
+def paired_octa_preprocessing(start=1, n_patients=1, n_images_per_patient=10, n_neighbours=2, threshold=0.65, sample = False, post_process_size=10):
     
     dataset = {}
 
     diabetes = 0
-    
+    base_data_path = os.environ["DATASET_DIR_PATH"]
+
     try:
         for i in range(start, start+n_patients):
             if diabetes != 0:
-                data_path = rf"C:\Datasets\ICIP training data\ICIP training data\{diabetes}\RawDataQA-{diabetes} ({i})"
+                base_data_path =  + rf"{diabetes}\RawDataQA-{diabetes} ({i})"
             else:
-                data_path = rf"C:\Datasets\ICIP training data\ICIP training data\0\RawDataQA ({i})"
+                data_path = base_data_path + rf"0\RawDataQA ({i})"
             print(f"Processing patient {i}")
             data = load_patient_data(data_path)
             assert len(data) > 0, f"No data found for patient {i}"
@@ -53,5 +52,38 @@ def preprocessing_v2(start=1, n_patients=1, n_images_per_patient=10, n_neighbour
     except Exception as e:
         print(f"Error in preprocessing: {e}")
         return None
+
+def paired_preprocessing(start=1, n_patients=1, sample=False):
+    """
+    Preprocess OCT images without OCTA calculation, maintaining paired structure.
+    """
+    dataset = {}
+    diabetes = 0
+    base_data_path = os.environ["DATASET_DIR_PATH"]
     
+    try:
+        for i in range(start, start+n_patients):
+            if diabetes != 0:
+                data_path = base_data_path + rf"{diabetes}\RawDataQA-{diabetes} ({i})"
+            else:
+                data_path = base_data_path + rf"0\RawDataQA ({i})"
+            print(f"Processing patient {i}")
+            data = load_patient_data(data_path)
+            print(f"Loaded {len(data)} images for patient {i}")
+            assert len(data) > 0, f"No data found for patient {i}"
+            
+            preprocessed_data = standard_preprocessing(data)
+            
+            input_target = []
+            for j in range(len(preprocessed_data)-1):
+                image1 = preprocessed_data[j]
+                image2 = preprocessed_data[j+1]
+                input_target.append([image1, image2])
+            
+            dataset[i] = input_target
+            
+        return dataset
     
+    except Exception as e:
+        print(f"Error in preprocessing: {e}")
+        return None

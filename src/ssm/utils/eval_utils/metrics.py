@@ -6,7 +6,7 @@ import torch
 import os
 import time
 import matplotlib.pyplot as plt
-from ssm.utils.data_utils.paired_preprocessing import preprocessing_v2
+from ssm.utils.data_utils.paired_preprocessing import paired_preprocessing
 
 def calculate_psnr(img1, img2, max_value=1.0):
 
@@ -336,7 +336,7 @@ def validate_model(model, n_patients=5, n_images_per_patient=10, device=None, sa
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Load validation data
-    val_dataset = preprocessing_v2(n_patients, n_images_per_patient, sample=True)
+    val_dataset = paired_preprocessing(n_patients, n_images_per_patient, sample=True)
     
     # Track metrics
     metrics_summary = {
