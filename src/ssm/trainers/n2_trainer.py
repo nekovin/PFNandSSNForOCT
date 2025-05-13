@@ -4,7 +4,11 @@ from ssm.models.unet.unet import UNet
 from ssm.models.unet.unet_2 import UNet2
 from ssm.models.unet.large_unet import LargeUNet, LargeUNetAttention
 from ssm.models.ssm.ssm_attention import SpeckleSeparationUNetAttention
-from ssm.trainers import train_n2n, train_n2v, train_n2s
+
+from ssm.schemas.baselines.n2n import train_n2n
+from ssm.schemas.baselines.n2v import train_n2v
+from ssm.schemas.baselines.n2s import train_n2s
+
 import os
 import torch.optim as optim
 import torch

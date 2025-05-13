@@ -4,7 +4,6 @@ import torch
 from IPython.display import clear_output
 
 import sys
-sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssn2v")
 
 from torch.utils.data import Dataset, DataLoader
 
@@ -14,8 +13,6 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 from torchvision import transforms
-from schemas.ssn2v.stage1.preprocessing import preprocessing
-from schemas.ssn2v.stage1.preprocessing_v2 import preprocessing_v2
 
 from contextlib import nullcontext
 

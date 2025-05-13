@@ -208,10 +208,6 @@ def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_ep
     
     return model
 
-
-
-###
-
 def lognormal_consistency_loss(denoised, noisy, epsilon=1e-6):
     """
     Physics-informed loss term that ensures denoised and noisy images 
