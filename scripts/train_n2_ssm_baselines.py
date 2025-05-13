@@ -1,21 +1,9 @@
-from trainers.n2n_trainer import train_n2n
-from trainers.n2v_trainer import train_n2v
-from trainers.n2s_trainer import train_n2s
+import os
+from ssm.trainers.n2_trainer import train_n2
 
-def main(model):
-
-    schemas = {
-            'n2n': train_n2n,
-            'n2v': train_n2v,
-            'n2s': train_n2s
-        }
+def main(schema):
     
-    if model is not None:
-        schemas = {
-            model : schemas[model]
-        }
-
-    patient_count = 10
+    patient_count = 5
 
     override_dict = {
         "training" : {
@@ -24,10 +12,11 @@ def main(model):
             "n_patients" : patient_count
             }
         }
+    
+    N2_PATH = os.environ.get("N2_CONFIG_PATH")
 
-    for schema in schemas.keys():
-        print(f"Training {schema} model")
-        schemas[schema](r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", True, override_dict)
+    print(f"Training {schema} model")
+    train_n2(config_path=N2_PATH, schema=schema, ssm=True, override_config=override_dict)
 
 if __name__ == "__main__":
     main()

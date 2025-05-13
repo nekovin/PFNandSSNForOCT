@@ -1,6 +1,6 @@
-from trainers.ssm_trainer import train_speckle_separation_module
-from losses.ssm_loss import custom_loss
-from utils.config import get_config
+from ssm.trainers import train_speckle_separation_module
+from ssm.losses.ssm_loss import custom_loss
+from ssm.utils.config import get_config
 
 def main():
     config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\ssm_config.yaml"

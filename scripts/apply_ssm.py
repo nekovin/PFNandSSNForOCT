@@ -1,4 +1,4 @@
-
+import torch
 
 def apply_model_to_dataset(model_path, dataset, 
                           batch_size=8, 
