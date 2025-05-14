@@ -111,13 +111,8 @@ def paired_preprocessing(start=1, n_patients=1, diabetes_list=[0,1,2], sample=Fa
             patient_dirs = sorted(os.listdir(diabetes_path), key=extract_number)
             sorted_patients = [os.path.join(diabetes_path, patient) for patient in patient_dirs]
             
-            # Process patients from this diabetes group
-            for i, patient_path in enumerate(sorted_patients, start):
-                # Skip patients before the start index
-                if i < start:
-                    continue
+            for i, patient_path in enumerate(sorted_patients, 1):
                     
-                # Break if we've processed enough patients
                 if patient_count >= n_patients:
                     break
                     
@@ -126,6 +121,10 @@ def paired_preprocessing(start=1, n_patients=1, diabetes_list=[0,1,2], sample=Fa
                 assert len(data) > 0, f"No data found for patient {i}"
                 
                 preprocessed_data = standard_preprocessing(data)
+
+                if len(preprocessed_data) <= 1: 
+                    print(f"Warning: Patient {i} has insufficient images ({len(preprocessed_data)})")
+                    continue
                 
                 input_target = []
                 for j in range(len(preprocessed_data)-1):
@@ -134,9 +133,8 @@ def paired_preprocessing(start=1, n_patients=1, diabetes_list=[0,1,2], sample=Fa
                     input_target.append([image1, image2])
                 
                 dataset[i] = input_target
-                patient_count += 1  # Increment our patient counter
+                patient_count += 1  
             
-            # Break out of diabetes loop if we've processed enough patients
             if patient_count >= n_patients:
                 break
                 

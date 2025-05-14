@@ -98,8 +98,11 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
             
             loss = criterion(outputs, target_imgs) + flow_loss * alpha
         else:
-            outputs = model(input_imgs)
-            loss = criterion(outputs, target_imgs)
+            try:
+                outputs = model(input_imgs)
+                loss = criterion(outputs, target_imgs)
+            except Exception as e:
+                print(f"Error in model output: {e}")
 
             #physics_loss = lognormal_consistency_loss(outputs, target_imgs)
             #loss += physics_loss * 0.01

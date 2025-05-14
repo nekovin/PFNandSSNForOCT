@@ -7,10 +7,7 @@ from ssm.utils import paired_preprocessing
 
 class PairedOCTDataset(Dataset):
     def __init__(self, start, n_patients=2, n_images_per_patient=50, transform=None, diabetes_list=[0,1,2]):
-        
         self.transform = transform
-        
-        #dataset_dict = paired_preprocessing(start, n_patients, n_images_per_patient, n_neighbours=2)
         dataset_dict = paired_preprocessing(start, n_patients, diabetes_list=diabetes_list)
         
         self.input_images = []
@@ -18,14 +15,19 @@ class PairedOCTDataset(Dataset):
         
         for patient_id, data in dataset_dict.items():
             print(f"Processing patient {patient_id} with {len(data)} images")
-            for i in range(len(data) - 1): 
-                input_image = data[i][0] 
-                target_image = data[i+1][0] 
+            for i in range(len(data)):  # Changed from range(len(data) - 1)
+                input_image = data[i][0]  # This is already the input image from paired_preprocessing
+                target_image = data[i][1]  # This is already the target image from paired_preprocessing
                 
-
+                # Shape validation (good to keep)
+                if input_image.shape != target_image.shape:
+                    print(f"Shape mismatch: {input_image.shape} vs {target_image.shape}")
+                    continue
+                
                 if np.isfinite(input_image).all() and np.isfinite(target_image).all():
                     self.input_images.append(input_image)
                     self.target_images.append(target_image)
+                
     
     def __len__(self):
         return len(self.input_images)
