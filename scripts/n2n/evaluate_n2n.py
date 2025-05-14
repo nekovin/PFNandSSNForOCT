@@ -1,0 +1,66 @@
+import matplotlib.pyplot as plt
+from ssm.evaluation import evaluate_baseline, evaluate_ssm_constraint, evaluate_progressssive_fusion_unet
+from ssm.utils import load_sdoct_dataset, display_metrics, display_grouped_metrics
+from tqdm import tqdm
+import torch
+import os
+
+def main():
+
+    n_patients = 25
+    
+    override_config = {
+        "eval" : {
+            "ablation": f"patient_count/{n_patients}_patients",
+            "n_patients" : n_patients
+            }
+        }
+    
+    config_path = os.getenv("N2_CONFIG_PATH")
+
+    all_metrics = {}
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
+    dataset = load_sdoct_dataset(sdoct_path)
+
+    for patient_id, patient_data in tqdm(dataset.items(), desc="Evaluating patients"):
+        raw_image = patient_data["raw"].to(device)
+        reference = patient_data["avg"].to(device)[0][0]
+        break
+
+    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    ax[0].imshow(raw_image.cpu().numpy()[0][0], cmap="gray")
+    ax[0].set_title("Raw Image")
+    ax[1].imshow(reference.cpu().numpy(), cmap="gray")
+    ax[1].set_title("Reference Image")
+    plt.show()
+
+    
+    n2n_metrics, n2n_denoised = evaluate_baseline(raw_image, reference, "n2n",config_path, override_config=override_config)
+    n2n_ssm_metrics, n2n_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2n", config_path, override_config=override_config)
+    n2n_metrics_last, n2n_denoised_last = evaluate_baseline(raw_image, reference, "n2n",config_path, override_config=override_config, last=True)
+    n2n_ssm_metrics_last, n2n_ssm_denoised_last = evaluate_ssm_constraint(raw_image, reference, "n2n", config_path, override_config=override_config, last=True)
+    metrics = {}
+    metrics['n2n'] = n2n_metrics
+    metrics['n2n_ssm'] = n2n_ssm_metrics
+    all_metrics['n2n'] = n2n_metrics
+    all_metrics['n2n_ssm'] = n2n_ssm_metrics
+    display_metrics(metrics)
+    fig, ax = plt.subplots(2, 2, figsize=(15, 5))
+
+    ax[0][0].imshow(n2n_denoised, cmap="gray")
+    ax[0][0].set_title("N2N Denoised")
+    ax[0][1].imshow(n2n_ssm_denoised, cmap="gray")
+    ax[0][1].set_title("N2N SSM Denoised")
+    ax[1][0].imshow(n2n_denoised_last, cmap="gray")
+    ax[1][0].set_title("N2N Denoised Last")
+    ax[1][1].imshow(n2n_ssm_denoised_last, cmap="gray")
+    ax[1][1].set_title("N2N SSM Denoised Last")
+    fig.tight_layout()
+    plt.show()
+    
+
+if __name__ == "__main__":
+    main()

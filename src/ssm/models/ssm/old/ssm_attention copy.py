@@ -2,6 +2,68 @@ import torch
 import torch.nn as nn
 import sys
 sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\src")
+
+class SpeckleSeparationModule(nn.Module):
+    """
+    A simplified module to separate OCT speckle into:
+    - Informative speckle (related to blood flow)
+    - Noise speckle (to be removed)
+    """
+    
+    def __init__(self, input_channels=1, feature_dim=32):
+        """
+        Initialize the Speckle Separation Module
+        
+        Args:
+            input_channels: Number of input image channels (default: 1 for grayscale OCT)
+            feature_dim: Dimension of feature maps
+        """
+        super(SpeckleSeparationModule, self).__init__()
+        
+        # Feature extraction
+        self.feature_extraction = nn.Sequential(
+            nn.Conv2d(input_channels, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True)
+        )
+        
+        # Flow component branch
+        self.flow_branch = nn.Sequential(
+            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(feature_dim, input_channels, kernel_size=1),
+            nn.Tanh()
+        )
+        
+        # Noise component branch
+        self.noise_branch = nn.Sequential(
+            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(feature_dim, input_channels, kernel_size=1)
+        )
+    
+    def forward(self, x):
+
+        features = self.feature_extraction(x)
+        
+        flow_component = self.flow_branch(features)
+        noise_component = self.noise_branch(features)
+        
+        return {
+            'flow_component': flow_component,
+            'noise_component': noise_component
+        }
+    
+######################
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 class ChannelAttention(nn.Module):
     """
     Channel attention module for OCT image processing
@@ -48,6 +110,77 @@ class SpatialAttention(nn.Module):
         attention_map = self.sigmoid(self.conv(attention_features))
         
         return x * attention_map  # Apply attention
+
+
+# Integration example: add these to your encoder/decoder blocks
+def add_attention_to_model(model):
+    """
+    Function to integrate attention modules into existing SpeckleSeparationUNet model
+    Call this after model initialization
+    """
+    # Example of how to integrate attention into encoder blocks
+    for i, encoder_block in enumerate(model.encoder_blocks):
+        channels = 32 * (2**min(i, 3))  # Match your channel calculation
+        
+        # Add attention after each encoder block
+        attention_modules = nn.Sequential(
+            ChannelAttention(channels),
+            SpatialAttention()
+        )
+        
+        # Create a new sequential combining original block with attention
+        new_block = nn.Sequential(
+            encoder_block,
+            attention_modules
+        )
+        
+        # Replace the original block
+        model.encoder_blocks[i] = new_block
+    
+    # Similarly for decoder blocks - adapt based on your model's structure
+    for i, decoder_block in enumerate(model.decoder_blocks):
+        channels = 32 * (2**min(model.depth-i-1, 3))  # Match your channel calculation
+        
+        attention_modules = nn.Sequential(
+            ChannelAttention(channels),
+            SpatialAttention()
+        )
+        
+        new_block = nn.Sequential(
+            decoder_block,
+            attention_modules
+        )
+        
+        model.decoder_blocks[i] = new_block
+    
+    return model
+
+class AttentionConvBlock(nn.Module):
+    """
+    Convolutional block with integrated attention mechanisms
+    """
+    def __init__(self, in_channels, out_channels):
+        super(AttentionConvBlock, self).__init__()
+        
+        # Standard convolutional layers
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
+        )
+        
+        # Attention mechanisms
+        self.channel_attention = ChannelAttention(out_channels)
+        self.spatial_attention = SpatialAttention()
+    
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.channel_attention(x)
+        x = self.spatial_attention(x)
+        return x
 
 class SpeckleSeparationUNetAttention(nn.Module):
     """
@@ -206,7 +339,7 @@ class SpeckleSeparationUNetAttention(nn.Module):
         # Encoder path with attention
         for i in range(self.depth):
             x = self.encoder_blocks[i](x)
-            x = self.encoder_attentions[i](x) 
+            x = self.encoder_attentions[i](x)  # Apply attention
             encoder_features.append(x)
             if i < self.depth - 1:
                 x = self.pool(x)
@@ -215,8 +348,10 @@ class SpeckleSeparationUNetAttention(nn.Module):
         x = self.bottleneck(x)
         x = self.bottleneck_attention(x)
         
+        # Decoder path with skip connections and attention
         for i in range(self.depth):
             x = self.up(x)
+            # Ensure matching sizes for concatenation
             encoder_feature = encoder_features[self.depth - i - 1]
             if x.size() != encoder_feature.size():
                 x = nn.functional.interpolate(x, size=encoder_feature.size()[2:], mode='bilinear', align_corners=True)
@@ -224,35 +359,129 @@ class SpeckleSeparationUNetAttention(nn.Module):
             x = self.decoder_blocks[i](x)
             x = self.decoder_attentions[i](x)  # Apply attention
         
+        # Apply dilated convolutions for larger receptive field
         x = self.dilation_block(x)
-        x = self.final_attention(x) 
+        x = self.final_attention(x)  # Final attention
         
+        # Generate flow and noise components
         flow_component = self.flow_branch(x)
-        #flow_component = torch.where(flow_component > 0.01, flow_component, torch.zeros_like(flow_component)) # binary
         noise_component = self.noise_branch(x)
 
+        #flow_component = normalize_image_torch(flow_component)
+        #noise_component = normalize_image_torch(noise_component)
         
         return {
             'flow_component': flow_component,
             'noise_component': noise_component
         }
     
-def get_ssm_model_attention(checkpoint_path):
+def get_ssm_model_attention(input_channels=1, feature_dim=32, depth=5, block_depth=3, checkpoint=None):
 
-    model = SpeckleSeparationUNetAttention()
+    model = SpeckleSeparationUNetAttention(input_channels, feature_dim, depth, block_depth)
     
-    if checkpoint_path:
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    if checkpoint:
+        checkpoint = torch.load(checkpoint, map_location='cpu')
         model.load_state_dict(checkpoint['model_state_dict'])
 
     return model
 
-def get_ssm_model(checkpoint_path):
+def get_ssm_model(input_channels=1, feature_dim=32, depth=5, block_depth=3, checkpoint=None):
 
-    model = SpeckleSeparationUNetAttention()
+    model = SpeckleSeparationUNetAttention(input_channels, feature_dim, depth, block_depth)
     
-    if checkpoint_path:
-        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    if checkpoint:
+        checkpoint = torch.load(checkpoint, map_location='cpu')
         model.load_state_dict(checkpoint['model_state_dict'])
 
     return model
+
+def normalize_image(np_img):
+    np_img = np_img.copy()
+    if np_img.max() > 0:
+        # Create mask of non-background pixels
+        foreground_mask = np_img > 0.01
+        if foreground_mask.any():
+            # Get min/max of only foreground pixels
+            fg_min = np_img[foreground_mask].min()
+            fg_max = np_img[foreground_mask].max()
+            
+            # Normalize only foreground pixels to [0,1] range
+            if fg_max > fg_min:
+                np_img[foreground_mask] = (np_img[foreground_mask] - fg_min) / (fg_max - fg_min)
+    
+    # Force background to be true black
+    np_img[np_img < 0.01] = 0
+    return np_img
+
+def normalize_image_torch(img_tensor):
+    """
+    Normalize image tensor while maintaining gradient flow
+    img_tensor: tensor of shape [B, C, H, W]
+    """
+    batch_size, channels = img_tensor.shape[:2]
+    normalized = torch.zeros_like(img_tensor)
+    
+    for b in range(batch_size):
+        for c in range(channels):
+            single_img = img_tensor[b, c]
+            
+            # Create foreground mask
+            foreground_mask = single_img > 0.01
+            
+            if foreground_mask.any():
+                # Get min/max of foreground pixels
+                fg_pixels = single_img[foreground_mask]
+                fg_min = fg_pixels.min()
+                fg_max = fg_pixels.max()
+                
+                # Normalize foreground pixels
+                if fg_max > fg_min:
+                    # Create normalized copy
+                    normalized_img = single_img.clone()
+                    normalized_img[foreground_mask] = (fg_pixels - fg_min) / (fg_max - fg_min)
+                    
+                    # Force background to zero
+                    normalized_img[~foreground_mask] = 0
+                    normalized[b, c] = normalized_img
+                else:
+                    # If all foreground pixels have same value, just zero the background
+                    normalized_img = single_img.clone()
+                    normalized_img[~foreground_mask] = 0
+                    normalized[b, c] = normalized_img
+            else:
+                # No foreground pixels, entire image is background
+                normalized[b, c] = torch.zeros_like(single_img)
+    
+    return normalized
+
+def normalize_image_torch_vectorized(img_tensor):
+    """
+    Vectorized version for better performance
+    img_tensor: tensor of shape [B, C, H, W]
+    """
+    # Flatten spatial dimensions for easier processing
+    batch_size, channels = img_tensor.shape[:2]
+    flat_shape = img_tensor.shape[:2] + (-1,)
+    flat_img = img_tensor.view(flat_shape)
+    
+    # Create foreground mask
+    foreground_mask = flat_img > 0.01
+    
+    # Initialize output
+    normalized = torch.zeros_like(flat_img)
+    
+    for b in range(batch_size):
+        for c in range(channels):
+            mask = foreground_mask[b, c]
+            if mask.any():
+                fg_pixels = flat_img[b, c, mask]
+                fg_min = fg_pixels.min()
+                fg_max = fg_pixels.max()
+                
+                if fg_max > fg_min:
+                    normalized[b, c, mask] = (fg_pixels - fg_min) / (fg_max - fg_min)
+                else:
+                    normalized[b, c, mask] = fg_pixels
+    
+    # Reshape back to original dimensions
+    return normalized.view(img_tensor.shape)

@@ -9,7 +9,8 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch
 
-from ssm.models import get_ssm_model
+from ssm.models import get_ssm_model_attention
+from ssm.models import get_ssm_model_simple
 from ssm.losses.ssm_loss import custom_loss
 
 import numpy as np
@@ -17,6 +18,10 @@ from torch.utils.data import random_split
 
 from ssm.utils import paired_preprocessing, visualize_progress, visualize_attention_maps, subset_blind_spot_masking
 from ssm.utils.config import get_config
+
+from ssm.utils import paired_octa_preprocessing, paired_octa_preprocessing_binary
+
+from ssm.models.unet.large_unet import LargeUNetAttention
 
 def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):
     running_loss = 0.0
@@ -37,29 +42,16 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
         if is_training and optimizer:
             optimizer.zero_grad()
             
-        #mask = torch.rand_like(batch_inputs) > 0.9  # mask ~10% of pixels
-        #masked_inputs = batch_inputs.clone()
-        
-        #if fast:
-            #roll_amount = torch.randint(-5, 5, (2,))
-            #shifted = torch.roll(batch_inputs, shifts=(roll_amount[0].item(), roll_amount[1].item()), dims=(2, 3))
-            #masked_inputs[mask] = shifted[mask]
-        #else: # proper masking
-            #masked_inputs = subset_blind_spot_masking(batch_inputs, mask, kernel_size=5)[0]
-
         with torch.set_grad_enabled(is_training):
             #outputs = model(masked_inputs)
             print(batch_inputs.shape)
             
             outputs = model(batch_inputs)
 
-            #outputs = model(batch_inputs)
             flow_component = outputs['flow_component']
             noise_component = outputs['noise_component']
 
-            #n2v_loss = mse(flow_component[mask], batch_targets[mask]).mean()
-            
-            if loss_fn:
+            if loss_fn.__name__ == 'custom_loss':
                 total_loss = loss_fn(
                     flow_component, 
                     noise_component, 
@@ -67,11 +59,10 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
                     batch_targets, 
                     loss_parameters=loss_parameters, 
                     debug=debug)
-                #total_loss = total_loss + n2v_loss * n2v_weight
-            
-            #else:
-                #total_loss = n2v_loss * n2v_weight
-
+            else:
+                total_loss = loss_fn(
+                    flow_component, 
+                    batch_targets)
 
         if is_training and optimizer:
             # Debug parameter changes before step (first epoch only)
@@ -128,8 +119,86 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
         )
         plt.close()
         
-        visualize_attention_maps(model, batch_inputs[random_idx:random_idx+1][0][0].cpu().numpy())
+        #visualize_attention_maps(model, batch_inputs[random_idx:random_idx+1][0][0].cpu().numpy())
 
+    return avg_loss
+
+def process_batch2(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):
+    running_loss = 0.0
+    running_flow_loss = 0.0
+    running_noise_loss = 0.0
+    
+    is_training = mode == 'train'
+    
+    progress_bar = tqdm(dataloader, desc=f"{mode.capitalize()} Epoch {epoch+1}/{num_epochs}")
+    print(f"{mode.capitalize()}...")
+    
+    for batch_inputs, batch_targets in progress_bar:
+        if is_training:
+            model.train()
+        else:
+            model.eval()
+        
+        if is_training and optimizer:
+            optimizer.zero_grad()
+            
+        with torch.set_grad_enabled(is_training):
+            print(batch_inputs.shape)
+            
+            outputs = model(batch_inputs)
+
+            total_loss = loss_fn(outputs, batch_targets)
+
+        if is_training and optimizer:
+            if debug and epoch == 0:
+                params_before = [p.clone().detach() for p in model.parameters()]
+            
+            total_loss.backward()
+            optimizer.step()
+            
+            # Debug parameter changes after step (first epoch only)
+            if debug and epoch == 0:
+                params_after = [p.clone().detach() for p in model.parameters()]
+                any_change = any(torch.any(b != a) for b, a in zip(params_before, params_after))
+                print(f"Parameters changed: {any_change}")
+
+        # Track losses
+        noise_loss = 0  # Placeholder, adjust if you calculate this elsewhere
+        running_loss += total_loss.item()
+        running_flow_loss += total_loss.item()
+        running_noise_loss += 0
+        
+        # Update progress bar
+        progress_bar.set_postfix({
+            'loss': total_loss.item(),
+            'flow_loss': total_loss.item(),
+            'noise_loss': noise_loss
+        })
+
+    # Calculate average losses for the epoch
+    avg_loss = running_loss / len(dataloader)
+    avg_flow_loss = running_flow_loss / len(dataloader)
+    avg_noise_loss = running_noise_loss / len(dataloader)
+    
+    # Only update history in training mode
+    if is_training:
+        history['loss'].append(avg_loss)
+        history['flow_loss'].append(avg_flow_loss)
+        history['noise_loss'].append(avg_noise_loss)
+
+    print(f"{mode.capitalize()} Epoch {epoch+1}/{num_epochs}, Loss: {avg_loss:.6f}, Flow Loss: {avg_flow_loss:.6f}, Noise Loss: {avg_noise_loss:.6f}")
+
+    if visualise and mode == 'val':
+        clear_output(wait=True)
+        random.seed(epoch)
+        random_idx = random.randint(0, batch_inputs.size(0)-1)
+        
+        fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+        ax[0].imshow(batch_inputs[0][0].cpu().numpy(), cmap='gray')
+        ax[1].imshow(batch_targets[0][0].cpu().numpy(), cmap='gray')
+        ax[2].imshow(outputs[0][0].cpu().numpy(), cmap='gray')
+        plt.show()
+        
     return avg_loss
 
 def train(train_dataloader, val_dataloader, checkpoint, checkpoint_path, model, history, optimizer, 
@@ -153,7 +222,7 @@ def train(train_dataloader, val_dataloader, checkpoint, checkpoint_path, model, 
     for epoch in range(set_epoch, num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs}")
         
-        # Training phase
+        
         train_loss = process_batch(
             train_dataloader, model, history, 
             epoch, num_epochs, optimizer, 
@@ -272,7 +341,10 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
 
     start = train_config['start']
 
-    dataset = preprocessing_v2(start, n_patients, 50, n_neighbours = 10, threshold=65, sample=False, post_process_size=10)
+    n_images_per_patient = train_config['n_images']
+
+    #dataset = paired_octa_preprocessing(start, n_patients, n_images_per_patient, n_neighbours = 10, threshold=65, sample=False, post_process_size=10)
+    dataset = paired_octa_preprocessing_binary(start, n_patients, n_images_per_patient, n_neighbours = 10, threshold=85, sample=False, post_process_size=10)
 
     print(f"Dataset size: {len(dataset)} patients")
 
@@ -289,20 +361,57 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
 
     learning_rate = train_config['learning_rate']
     num_epochs = train_config['num_epochs']
+    
+    set_epoch = 0
 
     base_checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
 
-    if train_config['load_model']:
-        try:
-            print(train_config['checkpoint'])
-            custom_loss_trained_path = train_config['load_checkpoint'].format(loss_fn=loss_name)
-            model = get_ssm_model(checkpoint=custom_loss_trained_path)
-            print("Loading model from checkpoint...")
-            #checkpoint_path = rf"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\ssm\checkpoints\{repr(model)}_best.pth"
-            
-            checkpoint_path = train_config['load_checkpoint'].format(loss_fn=loss_name)
-            
-            checkpoint = torch.load(checkpoint_path, map_location=device)
+    model_name = train_config['model_name']
+
+    if model_name == 'SSMSimple':
+        if train_config['load_model']:
+            checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
+            model = get_ssm_model_simple(checkpoint_path=checkpoint_path)
+            model.to(device)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            best_loss = checkpoint['best_loss']
+            set_epoch = checkpoint['epoch']
+            history = checkpoint['history']
+            num_epochs = num_epochs + set_epoch
+            print(f"Model loaded from {checkpoint_path} at epoch {set_epoch} with loss {best_loss:.6f}")
+        else:
+            model = get_ssm_model_simple(checkpoint_path=None)
+            model.to(device)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            best_loss = float('inf')
+            set_epoch = 0
+    
+    if model_name == 'SSMAttention':
+        if train_config['load_model']:
+            checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
+            model = get_ssm_model_attention(checkpoint_path=checkpoint_path)
+            model.to(device)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            best_loss = checkpoint['best_loss']
+            set_epoch = checkpoint['epoch']
+            history = checkpoint['history']
+            num_epochs = num_epochs + set_epoch
+            print(f"Model loaded from {checkpoint_path} at epoch {set_epoch} with loss {best_loss:.6f}")
+        else:
+            model = get_ssm_model_attention(checkpoint_path=None)
+            model.to(device)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            best_loss = float('inf')
+            set_epoch = 0
+
+    if model_name == 'UNet':
+        checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
+        print("Loading UNet model...")
+        if train_config['load_model']:
+            checkpoint = torch.load(checkpoint_path, map_location='cpu')
+            model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
             model.load_state_dict(checkpoint['model_state_dict'])
             model.to(device)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -312,17 +421,14 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
             history = checkpoint['history']
             num_epochs = num_epochs + set_epoch
             print(f"Model loaded from {checkpoint_path} at epoch {set_epoch} with loss {best_loss:.6f}")
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            print("Starting training from scratch.")
-            raise e 
-    else:
-        model = get_ssm_model(checkpoint=None)
-        model.to(device)
-        optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-        best_loss = float('inf')
-        set_epoch = 0
-
+        else:
+            model = LargeUNetAttention()
+            model.to(device)
+            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+            best_loss = float('inf')
+            set_epoch = 0
+    
+    print(f"Model: {model_name}")
     checkpoint = {
         'epoch': set_epoch,
         'model_state_dict': model.state_dict(),

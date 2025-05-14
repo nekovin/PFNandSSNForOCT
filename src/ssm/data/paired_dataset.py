@@ -8,7 +8,7 @@ from ssm.utils import paired_preprocessing
 class PairedOCTDataset(Dataset):
     def __init__(self, start, n_patients=2, n_images_per_patient=50, transform=None, diabetes_list=[0,1,2]):
         self.transform = transform
-        dataset_dict = paired_preprocessing(start, n_patients, diabetes_list=diabetes_list)
+        dataset_dict = paired_preprocessing(start, n_patients, n_images_per_patient, diabetes_list=diabetes_list)
         
         self.input_images = []
         self.target_images = []
@@ -81,14 +81,16 @@ def get_paired_loaders(start, n_patients=2, n_images_per_patient=50, batch_size=
         train_dataset, 
         batch_size=batch_size, 
         shuffle=shuffle, 
-        num_workers=0
+        num_workers=0,
+        drop_last=True
     )
     
     val_loader = DataLoader(
         val_dataset, 
         batch_size=batch_size, 
         shuffle=False, 
-        num_workers=0
+        num_workers=0,
+        drop_last=True
     )
     
     return train_loader, val_loader

@@ -3,9 +3,9 @@ from ssm.trainers.n2_trainer import train_all_n2
 
 def main():
     
-    patient_count = 3
+    patient_count = 2
 
-    override_dict = {
+    override_dict = { 
         "training" : {
             "ablation": f"patient_count/{patient_count}_patients",
             "n_patients" : patient_count

@@ -247,7 +247,6 @@ def custom_loss(flow_component, noise_component, batch_inputs, batch_targets, lo
         #+ 1.0 * flow_preservation_loss
     )
 
-    if debug:
-        print(f"Foreground Loss: {foreground_loss.item()}, Background Loss: {background_loss.item()}, Edge Loss: {edge_loss.item()}, Discontinuity Penalty: {discontinuity_penalty.item()}, Flow Preservation Loss: {flow_preservation_loss.item()}")
+    print(f"Foreground Loss: {foreground_loss.item()}, Background Loss: {background_loss.item()}, Edge Loss: {edge_loss.item()}, Discontinuity Penalty: {discontinuity_penalty.item()}")
     
     return total_loss

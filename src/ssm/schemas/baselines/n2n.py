@@ -80,6 +80,7 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
     mode = 'train' if model.training else 'val'
     
     epoch_loss = 0
+    
     for batch_idx, (input_imgs, target_imgs) in enumerate(data_loader):
         input_imgs = input_imgs.to(device)
         target_imgs = target_imgs.to(device)
@@ -116,9 +117,6 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
             scheduler.step(loss)
         
         epoch_loss += loss.item()
-        
-        if (batch_idx + 1) % 10 == 0:
-            print(f"{mode.capitalize()} Epoch [{epoch+1}/{epochs}], Batch [{batch_idx+1}/{len(data_loader)}], Loss: {loss.item():.6f}")
 
         if visualise and batch_idx % 10 == 0:
             assert input_imgs[0][0].shape == (256, 256)
@@ -150,11 +148,6 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
                 }
                 
             plot_images(images, titles, losses)
-
-            '''
-            if epoch == 0 and mode == 'train' and speckle_module is not None:
-                plot_computation_graph(model, loss, speckle_module)
-            '''
 
     return epoch_loss / len(data_loader)
 
@@ -194,52 +187,19 @@ def train_n2n(model, train_loader, val_loader, optimizer, criterion, starting_ep
                 'best_val_loss': best_val_loss
             }, best_checkpoint_path)
     
-    if save:
-        print(f"Saving last model with val loss: {val_loss:.6f}")
-        torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'train_loss': train_loss,
-                    'val_loss': val_loss,
-                    'best_val_loss': best_val_loss
-            }, last_checkpoint_path)
+        if save:
+            print(f"Saving last model with val loss: {val_loss:.6f}")
+            torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'train_loss': train_loss,
+                        'val_loss': val_loss,
+                        'best_val_loss': best_val_loss
+                }, last_checkpoint_path)
     
     elapsed_time = time.time() - start_time
     print(f"Training completed in {elapsed_time / 60:.2f} minutes")
     
     return model
 
-def lognormal_consistency_loss(denoised, noisy, epsilon=1e-6):
-    """
-    Physics-informed loss term that ensures denoised and noisy images 
-    maintain the expected log-normal relationship for OCT speckle.
-    """
-    # Clamp values to prevent zeros and negatives
-    denoised_safe = torch.clamp(denoised, min=epsilon)
-    noisy_safe = torch.clamp(noisy, min=epsilon)
-    
-    # Calculate ratio between images (speckle should be multiplicative)
-    ratio = noisy_safe / denoised_safe
-    
-    # Clamp ratio to reasonable range to prevent extreme values
-    ratio_safe = torch.clamp(ratio, min=epsilon, max=10.0)
-    
-    # Log-transform the ratio which should follow normal distribution
-    log_ratio = torch.log(ratio_safe)
-    
-    # For log-normal statistics, calculate parameters
-    mu = torch.mean(log_ratio)
-    sigma = torch.std(log_ratio)
-    
-    # Check for NaN values
-    if torch.isnan(mu) or torch.isnan(sigma):
-        return torch.tensor(0.0, device=denoised.device, requires_grad=True)
-    
-    # Expected values for log-normal OCT speckle
-    expected_mu = 0.0  # Calibrate this
-    expected_sigma = 0.5  # Calibrate this
-    
-    # Penalize deviation from expected log-normal statistics
-    loss = torch.abs(mu - expected_mu) + torch.abs(sigma - expected_sigma)
-    return loss

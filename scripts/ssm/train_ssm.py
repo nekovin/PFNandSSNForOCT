@@ -1,17 +1,25 @@
 from ssm.trainers import train_speckle_separation_module
 from ssm.losses.ssm_loss import custom_loss
 from ssm.utils.config import get_config
+import os
+#from ssm.losses.mse import mse_loss
+import torch
+def mse_loss(y_true, y_pred):
+
+    return torch.mean((y_true - y_pred) ** 2)
 
 def main():
-    config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\ssm_config.yaml"
+    
+    config_path = os.environ.get("SSM_CONFIG_PATH")
 
     config = get_config(config_path)
 
     loss_names = ['custom_loss', 'mse']
-    loss_name = 'custom_loss'  # 'mse' or 'custom_loss'
+    #loss_name = 'custom_loss'  # 'mse' or 'custom_loss'
+    loss_name = config['training']['criterion']
 
     if loss_name == 'mse':
-        loss_fn = None
+        loss_fn = mse_loss
     else:
         loss_fn = custom_loss
 

@@ -104,7 +104,7 @@ def train(config, method, ssm):
         speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)
         try:
             print("Loading ssm model from checkpoint...")
-            ssm_checkpoint_path = rf"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\SpeckleSeparationUNetAttention_custom_loss_best.pth"
+            ssm_checkpoint_path = train_config['ssm_checkpoint_path']
             ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
             speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
             speckle_module.to(device)
@@ -224,7 +224,6 @@ def train_all_three(config, ssm):
     sample = next(iter(train_loader))[0].shape
     print(f"Sample shape: {sample}")
     print(f"Validation loader size: {len(val_loader.dataset)}")
-    #train_loader2, val_loader2 = get_loaders(37, 3, n_images_per_patient, batch_size)
 
     baselines_checkpoint_path = train_config['baselines_checkpoint_path'] + ablation
 

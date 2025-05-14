@@ -31,11 +31,7 @@ def load_model(config, verbose=False, last=False):
     if model == "LargeUNetAttention":
         model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
 
-    #print(f"Loading model: {model}")
-    #print(f"Checkpoint path: {checkpoint_path}")
-    
-    #checkpoint = torch.load(checkpoint_path, map_location=device)
-    checkpoint = load_checkpoint(config, last=last)
+    checkpoint = load_checkpoint(config)
     model.load_state_dict(checkpoint['model_state_dict'])
 
     if verbose:
@@ -80,7 +76,7 @@ def load_checkpoint(config, last=False):
     
     return checkpoint
 
-def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_config = None, last=False):
+def evaluate_baseline(image, reference, method, config_path = None, override_config = None, last=False):
     
     config = get_config(config_path, override_config)
     
@@ -105,9 +101,9 @@ def evaluate_baseline(image, reference, method, config_path = r"C:\Users\CL-11\O
 
     return metrics, denoised
 
-def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_dict = None, last=False):
+def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_config = None, last=False):
     
-    config = get_config(config_path, override_dict)
+    config = get_config(config_path, override_config)
 
     exclude = config['eval']['exclude'][method]
     if exclude:

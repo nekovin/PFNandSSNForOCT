@@ -8,3 +8,4 @@ from .unet.unet_superres import *
 
 from .ssm.ssm import *
 from .ssm.ssm_attention import *
+from .ssm.ssm_attention_simple import *
