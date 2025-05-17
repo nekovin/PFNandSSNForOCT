@@ -1,9 +1,10 @@
 from ssm.utils.data_utils.standard_preprocessing import standard_preprocessing
 from ssm.utils.data_utils.oct_preprocessing import octa_preprocessing, remove_speckle_noise
 from ssm.utils.data_utils.data_loading  import load_patient_data
+from ssm.utils.data_utils.helper import extract_number
 import os
-import re
 import random
+
 
 def pair_data(preprocessed_data, octa_data, n_images_per_patient):
     n_neighbours = (len(preprocessed_data) - len(octa_data)) // 2
@@ -89,15 +90,6 @@ def _paired_preprocessing(start=1, n_patients=1, diabetes_list=[0,1,2], sample=F
     except Exception as e:
         print(f"Error in preprocessing: {e}")
         return None
-
-
-
-def extract_number(filename):
-    match = re.search(r'\((\d+)\)', filename)
-    if match:
-        return int(match.group(1))
-    return 0 
-
     
 def paired_preprocessing(start=1, n_patients=1, diabetes_list=[0,1,2], sample=False):
     dataset = {}
@@ -161,33 +153,26 @@ def paired_preprocessing(start=1, n_patients=1, n_images_per_patient=10, diabete
     dataset = {}
     base_data_path = os.environ["DATASET_DIR_PATH"]
     
-    dataset_index = 0  # Counter for dataset keys
+    dataset_index = 0
     
     try:
-        # First, collect all available patients across all diabetes categories
         all_patients = []
         for diabetes in diabetes_list:
             diabetes_path = os.path.join(base_data_path, f"{diabetes}")
             patient_dirs = sorted(os.listdir(diabetes_path), key=extract_number)
             
-            # Store tuple of (path, diabetes_type)
             for patient_dir in patient_dirs:
                 patient_path = os.path.join(diabetes_path, patient_dir)
                 all_patients.append((patient_path, diabetes))
         
-        # Shuffle all patients
         random.shuffle(all_patients)
         
-        # Calculate how many patients to take from each diabetes category
         patients_per_category = n_patients // len(diabetes_list)
         remainder = n_patients % len(diabetes_list)
         
-        # Create a dictionary to track how many patients we've selected from each category
         selected_count = {diabetes: 0 for diabetes in diabetes_list}
         
-        # Process patients
         for patient_path, diabetes_type in all_patients:
-            # If we've selected enough patients from this category, skip
             if selected_count[diabetes_type] >= patients_per_category + (1 if diabetes_type < remainder else 0):
                 continue
                 
@@ -210,15 +195,21 @@ def paired_preprocessing(start=1, n_patients=1, n_images_per_patient=10, diabete
             print(f"Preprocessed data shape: {preprocessed_data.shape}")
             
             input_target = []
-            for j in range(len(preprocessed_data)-1):
-                image1 = preprocessed_data[j]
-                image2 = preprocessed_data[j+1]
+            available_indices = list(range(len(preprocessed_data)-1))
+            random.shuffle(available_indices)
+            while len(input_target) < n_images_per_patient and available_indices:
+                j = available_indices.pop(0)  # Take the next random index and remove it
                 
-                # Verify image shapes
-                if image1.shape != (256, 256, 1) or image2.shape != (256, 256, 1):
-                    print(f"WARNING: Unexpected image shape: {image1.shape}, {image2.shape}")
-                
-                input_target.append([image1, image2])
+                if j+1 < len(preprocessed_data):  # Ensure we have a valid pair
+                    image1 = preprocessed_data[j]
+                    image2 = preprocessed_data[j+1]
+                    
+                    # Verify image shapes
+                    if image1.shape != (256, 256, 1) or image2.shape != (256, 256, 1):
+                        print(f"WARNING: Unexpected image shape: {image1.shape}, {image2.shape}")
+                        continue
+                    
+                    input_target.append([image1, image2])
             
             dataset_index += 1  # Use a sequential index for the dataset
             dataset[dataset_index] = input_target
@@ -365,7 +356,6 @@ def paired_octa_preprocessing_binary(start=1, n_patients=1, n_images_per_patient
                 
             patient_id = extract_number(os.path.basename(patient_path))
             
-            # Load and preprocess data
             data = load_patient_data(patient_path)
             print(f"Loaded {len(data)} images for patient {patient_id} (diabetes type {diabetes_type})")
             if len(data) < n_neighbours + 1:
@@ -394,8 +384,6 @@ def paired_octa_preprocessing_binary(start=1, n_patients=1, n_images_per_patient
                 print(f"Warning: No cleaned OCTA data generated for patient {patient_id}")
                 continue
                 
-            # Create proper input-target pairs
-            # The OCTA images should align with corresponding B-scans with n_neighbours offset
             input_target = []
             for i in range(len(cleaned_octa_data)):
                 if i + n_neighbours < len(preprocessed_data):

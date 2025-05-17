@@ -2,12 +2,17 @@ from ssm.data import get_paired_loaders
 from ssm.utils.config import get_config
 from ssm.models.unet.unet import UNet
 from ssm.models.unet.unet_2 import UNet2
-from ssm.models.unet.large_unet import LargeUNet, LargeUNetAttention
+from ssm.models.unet.large_unet import LargeUNet, LargeUNetAttention, LargeUNet2, LargeUNet3
 from ssm.models.ssm.ssm_attention import SpeckleSeparationUNetAttention
+from ssm.models.unet.small_unet import SmallUNet
+from ssm.models.unet.small_unet_att import SmallUNetAtt
 
 from ssm.schemas.baselines.n2n import train_n2n
 from ssm.schemas.baselines.n2v import train_n2v
 from ssm.schemas.baselines.n2s import train_n2s
+
+from ssm.schemas.baselines.n2n_patch import train_n2n_patch
+from ssm.schemas.baselines.n2v_patch import train_n2v_patch
 
 import os
 import torch.optim as optim
@@ -38,7 +43,7 @@ def train(config, method, ssm):
     n_images_per_patient = train_config['n_images_per_patient']
     batch_size = train_config['batch_size']
     start = train_config['start_patient'] if train_config['start_patient'] else 1
-    ablation = train_config['ablation']
+    ablation = train_config['ablation'].format(n=n_patients)
 
     train_loader, val_loader = get_paired_loaders(start, n_patients, n_images_per_patient, batch_size)
     print(f"Train loader size: {len(train_loader.dataset)}")
@@ -72,6 +77,18 @@ def train(config, method, ssm):
         model = LargeUNet(in_channels=1, out_channels=1).to(device)
     elif train_config['model'] == 'LargeUNetAttention':
         model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'LargeUNetNoAttention' or train_config['model'] == 'LargeUNet2':
+        model = LargeUNet2(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'LargeUNet3':
+        model = LargeUNet3(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'SmallUNet':
+        model = SmallUNet(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'SmallUNetAtt':
+        model = SmallUNetAtt(in_channels=1, out_channels=1).to(device)
+    else:
+        raise ValueError("Model not found")
+
+        
 
     optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
@@ -133,48 +150,94 @@ def train(config, method, ssm):
             print("Starting training from scratch.")
     
     if train_config['train']:
+        patch = train_config['patch']
         if method == "n2n":
-            model = train_n2n(
-                model,
-                train_loader, 
-                val_loader, # bandaid
-                optimizer=optimizer,
-                criterion=train_config['criterion'],
-                starting_epoch=starting_epoch,
-                epochs=train_config['epochs'], 
-                batch_size=train_config['batch_size'], 
-                lr=train_config['learning_rate'],
-                best_val_loss=best_val_loss,
-                checkpoint_path=checkpoint_path,
-                device=device,
-                visualise=visualise,
-                speckle_module=speckle_module,
-                alpha=alpha,
-                save=save,
-                scheduler=scheduler)
+            
+            if patch:
+                train_n2n_patch(
+                    model,
+                    train_loader, 
+                    val_loader, # bandaid
+                    optimizer=optimizer,
+                    criterion=train_config['criterion'],
+                    starting_epoch=starting_epoch,
+                    epochs=train_config['epochs'], 
+                    batch_size=train_config['batch_size'], 
+                    lr=train_config['learning_rate'],
+                    best_val_loss=best_val_loss,
+                    checkpoint_path=checkpoint_path,
+                    device=device,
+                    visualise=visualise,
+                    speckle_module=speckle_module,
+                    alpha=alpha,
+                    save=save,
+                    scheduler=scheduler)
+            else:
+                model = train_n2n(
+                    model,
+                    train_loader, 
+                    val_loader, # bandaid
+                    optimizer=optimizer,
+                    criterion=train_config['criterion'],
+                    starting_epoch=starting_epoch,
+                    epochs=train_config['epochs'], 
+                    batch_size=train_config['batch_size'], 
+                    lr=train_config['learning_rate'],
+                    best_val_loss=best_val_loss,
+                    checkpoint_path=checkpoint_path,
+                    device=device,
+                    visualise=visualise,
+                    speckle_module=speckle_module,
+                    alpha=alpha,
+                    save=save,
+                    scheduler=scheduler)
             
         elif method == "n2v":
-            model = train_n2v(
-                model,
-                train_loader,
-                val_loader,
-                optimizer=optimizer,
-                criterion=train_config['criterion'],
-                starting_epoch=starting_epoch,
-                epochs=train_config['epochs'], 
-                batch_size=train_config['batch_size'], 
-                lr=train_config['learning_rate'],
-                best_val_loss=best_val_loss,
-                checkpoint_path=checkpoint_path,
-                device=device,
-                visualise=visualise,
-                speckle_module=speckle_module,
-                alpha=alpha,
-                save=save,
-                method=method,
-                octa_criterion=False,
-                threshold=train_config['threshold'],
-                mask_ratio=train_config['mask_ratio'])
+            if patch:
+
+                model = train_n2v_patch(
+                    model,
+                    train_loader,
+                    val_loader,
+                    optimizer=optimizer,
+                    criterion=train_config['criterion'],
+                    starting_epoch=starting_epoch,
+                    epochs=train_config['epochs'], 
+                    batch_size=train_config['batch_size'], 
+                    lr=train_config['learning_rate'],
+                    best_val_loss=best_val_loss,
+                    checkpoint_path=checkpoint_path,
+                    device=device,
+                    visualise=visualise,
+                    speckle_module=speckle_module,
+                    alpha=alpha,
+                    save=save,
+                    method=method,
+                    octa_criterion=False,
+                    threshold=train_config['threshold'],
+                    mask_ratio=train_config['mask_ratio'])
+            else:
+                model = train_n2v(
+                    model,
+                    train_loader,
+                    val_loader,
+                    optimizer=optimizer,
+                    criterion=train_config['criterion'],
+                    starting_epoch=starting_epoch,
+                    epochs=train_config['epochs'], 
+                    batch_size=train_config['batch_size'], 
+                    lr=train_config['learning_rate'],
+                    best_val_loss=best_val_loss,
+                    checkpoint_path=checkpoint_path,
+                    device=device,
+                    visualise=visualise,
+                    speckle_module=speckle_module,
+                    alpha=alpha,
+                    save=save,
+                    method=method,
+                    octa_criterion=False,
+                    threshold=train_config['threshold'],
+                    mask_ratio=train_config['mask_ratio'])
         elif method == "n2s":
             model = train_n2s(
                 model,

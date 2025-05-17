@@ -1,14 +1,5 @@
-import os
-import glob
-import numpy as np
 import cv2
-from skimage import io
-import matplotlib.pyplot as plt
 import torch
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
-from skimage.filters import threshold_local
-import cv2
 import numpy as np
 
 def normalize_image(np_img):
@@ -24,19 +15,39 @@ def normalize_image(np_img):
     np_img[np_img < 0.01] = 0
     return np_img
 
+def normalize_image_np(img):
+    min_val = np.min(img)
+    max_val = np.max(img)
+    
+    if max_val > min_val:
+        normalized = (img - min_val) / (max_val - min_val)
+    else:
+        normalized = np.zeros_like(img)
+    
+    return normalized
+
+def normalize_image_torch(img):
+
+    # Get min and max values
+    min_val = torch.min(img)
+    max_val = torch.max(img)
+    
+    # Normalize to [0,1] range
+    if max_val > min_val:
+        normalized = (img - min_val) / (max_val - min_val)
+    else:
+        normalized = torch.zeros_like(img)
+    
+    return normalized
 
 def standard_preprocessing(oct_volume):
     preprocessed = []
 
     for i, img in enumerate(oct_volume):
         
-        if img.max() > 1.0:
-            img = img / 255.0
-        
-        if len(img.shape) > 2:
-            img = img[:, :, 0]
-        
         resized = cv2.resize(img, (256, 256), interpolation=cv2.INTER_LINEAR)
+
+        resized = normalize_image_np(resized)
         
         resized = resized[:, :, np.newaxis]
         

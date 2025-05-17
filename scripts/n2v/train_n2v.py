@@ -4,14 +4,14 @@ from ssm.utils.seed import set_seed
 from ssm.utils.config import get_config
 
 def main():
-
+    
     N2_CONFIG_PATH = os.environ.get("N2_CONFIG_PATH")
 
     config = get_config(N2_CONFIG_PATH)
     
     patient_count = config['training']['n_patients']
 
-    schema = "n2n"
+    schema = "n2v"
 
     override_dict = {
         "training" : {

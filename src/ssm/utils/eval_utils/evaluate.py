@@ -42,6 +42,10 @@ def plot_sample(image, denoised, model, method):
 def denoise_image(model, image, device):
     model.eval()
     with torch.no_grad():
+        if isinstance(image, np.ndarray):
+            image = torch.from_numpy(image).float()
+            if len(image.shape) == 2:
+                image = image.unsqueeze(0).unsqueeze(0)
         image = image.to(device)
         denoised_image = model(image)
     return denoised_image
@@ -52,34 +56,66 @@ device = os.getenv("DEVICE")
 device
 
 def evaluate(image, reference, model, method):
+    # Convert image to tensor if it's a numpy array
+    if isinstance(image, np.ndarray):
+        image_tensor = torch.from_numpy(image).float()
+        if len(image_tensor.shape) == 2:
+            image_tensor = image_tensor.unsqueeze(0).unsqueeze(0)
+        original_image = image  # Keep original for metrics
+    else:
+        image_tensor = image
+        try:
+            original_image = image.cpu().numpy()[0][0]
+        except:
+            original_image = image.cpu().numpy()
 
-    denoised = denoise_image(model, image, device='cuda')[0][0]
+    denoised = denoise_image(model, image_tensor, device='cuda')
+    
+    # Convert denoised to numpy
+    if isinstance(denoised, torch.Tensor):
+        denoised_np = denoised.cpu().numpy()
+    else:
+        denoised_np = denoised
+        
+    # Get the first image if it's batched
+    if len(denoised_np.shape) > 2:
+        if len(denoised_np.shape) == 4:  # [batch, channel, height, width]
+            denoised_np = denoised_np[0, 0]
+        elif len(denoised_np.shape) == 3:  # [channel, height, width] or [batch, height, width]
+            denoised_np = denoised_np[0]
+    
+    # Handle reference (could be tensor or numpy)
+    if isinstance(reference, torch.Tensor):
+        reference_np = reference.cpu().numpy()
+        if len(reference_np.shape) > 2:
+            if len(reference_np.shape) == 4:  # [batch, channel, height, width]
+                reference_np = reference_np[0, 0]
+            elif len(reference_np.shape) == 3:  # [channel, height, width] or [batch, height, width]
+                reference_np = reference_np[0]
+    else:
+        reference_np = reference
+        if len(reference_np.shape) > 2:
+            if len(reference_np.shape) == 4:  # [batch, channel, height, width]
+                reference_np = reference_np[0, 0]
+            elif len(reference_np.shape) == 3:  # [channel, height, width] or [batch, height, width]
+                reference_np = reference_np[0]
+    
+    # Print shapes for debugging
+    original_image = original_image.squeeze().squeeze()
+    print(f"Original shape: {original_image.shape}")
+    print(f"Denoised shape: {denoised_np.shape}")
+    print(f"Reference shape: {reference_np.shape}")
+    
+    # Calculate metrics
+    metrics = evaluate_oct_denoising(original_image, denoised_np, reference_np)
+    
+    return metrics, denoised_np
 
-    try:
-        sample_image = image.cpu().numpy()[0][0]
-    except:
-        sample_image = image
-
-    denoised = denoised.cpu().numpy()
-    reference = reference.cpu().numpy()
-
-    if len(denoised.shape) == 3: # this is because my pfn model retusn a 3d tensor
-        denoised = denoised[0]
-    metrics = evaluate_oct_denoising(sample_image, denoised, reference)
-
-    return metrics, denoised
+from ssm.utils.data_utils.standard_preprocessing import normalize_image
 
 
 def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
-    """Load all images from the SDOCT dataset and resize them.
-    
-    Args:
-        dataset_path: Path to the SDOCT dataset directory
-        target_size: Size to resize images to
-        
-    Returns:
-        Dictionary containing patient data with raw and averaged images
-    """
+
     sdoct_data = {}
     patients = os.listdir(dataset_path)
     
@@ -90,30 +126,20 @@ def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
         raw_path = os.path.join(patient_path, f"{patient}_Raw Image.tif")
         
         try:
-            # Check if both files exist
             if not os.path.exists(avg_path) or not os.path.exists(raw_path):
                 print(f"Missing files for patient {patient}")
                 continue
                 
-            # Load and resize images
             raw_img = io.imread(raw_path)
             avg_img = io.imread(avg_path)
-            
-            # Normalize images to 0-1 range if needed
-            if raw_img.max() > 1.0:
-                raw_img = raw_img / 255.0
-            if avg_img.max() > 1.0:
-                avg_img = avg_img / 255.0
                 
             # Resize images
             raw_img = resize(raw_img, target_size, anti_aliasing=True)
             avg_img = resize(avg_img, target_size, anti_aliasing=True)
             
-            # Convert to PyTorch tensors
             raw_tensor = torch.from_numpy(raw_img).float().unsqueeze(0).unsqueeze(0)
             avg_tensor = torch.from_numpy(avg_img).float().unsqueeze(0).unsqueeze(0)
             
-            # Store in dictionary
             sdoct_data[patient] = {
                 "raw": raw_tensor,
                 "avg": avg_tensor,

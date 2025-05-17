@@ -1,11 +1,13 @@
 from ssm.utils.config import get_config
 from ssm.utils.eval_utils.evaluate import evaluate
 import torch
-from ssm.models import UNet, UNet2, LargeUNet, LargeUNetAttention
+from ssm.models import UNet, UNet2, LargeUNet, LargeUNetAttention, LargeUNet2, LargeUNet3
+from ssm.models.unet.small_unet import SmallUNet
+from ssm.models.unet.small_unet_att import SmallUNetAtt
 
 def load_model(config, verbose=False, last=False):
     use_speckle = config['speckle_module']['use']
-    eval_config = config['eval']
+    eval_config = config['training']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
     method = eval_config['method']
     model = eval_config['model']
@@ -17,21 +19,29 @@ def load_model(config, verbose=False, last=False):
             checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_last_checkpoint.pth"
     else:
         checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
-
-    
     
     device = eval_config['device']
     
     if model == "UNet":
         model = UNet(in_channels=1, out_channels=1).to(device)
-    if model == "UNet2":
+    elif model == "UNet2":
         model = UNet2(in_channels=1, out_channels=1).to(device)
-    if model == "LargeUNet":
+    elif model == "LargeUNet":
         model = LargeUNet(in_channels=1, out_channels=1).to(device)
-    if model == "LargeUNetAttention":
+    elif model == "LargeUNetAttention":
         model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
+    elif model == "LargeUNetNoAttention" or model == "LargeUNet2":
+        model = LargeUNet2(in_channels=1, out_channels=1).to(device)
+    elif model == "LargeUNet3":
+        model = LargeUNet3(in_channels=1, out_channels=1).to(device)
+    elif model == "SmallUNet":
+        model = SmallUNet(in_channels=1, out_channels=1).to(device)
+    elif model == "SmallUNetAtt":
+        model = SmallUNetAtt().to(device)
+    else:
+        raise ValueError(f"Model {model} not supported")
 
-    checkpoint = load_checkpoint(config)
+    checkpoint = load_checkpoint(config, last)
     model.load_state_dict(checkpoint['model_state_dict'])
 
     if verbose:
@@ -48,9 +58,9 @@ def load_model(config, verbose=False, last=False):
     return model, checkpoint
 
 def load_checkpoint(config, last=False):
-    eval_config = config['eval']
+    eval_config = config['training']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
-    ablation = eval_config['ablation']
+    ablation = eval_config['ablation'].format(n=config['training']['n_patients'])
     method = eval_config['method']
     model = eval_config['model']
     if config['speckle_module']['use']:
@@ -80,15 +90,9 @@ def evaluate_baseline(image, reference, method, config_path = None, override_con
     
     config = get_config(config_path, override_config)
     
-    config['eval']['method'] = method
+    config['training']['method'] = method
     
-    verbose = config['eval']['verbose']
-
-    exclude = config['eval']['exclude'][method]
-
-    if exclude:
-        print(f"Method {method} is excluded from evaluation.")
-        return None, None
+    verbose = config['training']['verbose']
 
     model, checkpoint = load_model(config, verbose, last=last)
     #checkpoint = load_checkpoint(config, last=last)
@@ -101,17 +105,13 @@ def evaluate_baseline(image, reference, method, config_path = None, override_con
 
     return metrics, denoised
 
-def evaluate_ssm_constraint(image, reference, method, config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\n2_config.yaml", override_config = None, last=False):
+def evaluate_ssm_constraint(image, reference, method, config_path, override_config = None, last=False):
     
     config = get_config(config_path, override_config)
-
-    exclude = config['eval']['exclude'][method]
-    if exclude:
-        return None, None
     
     config['speckle_module']['use'] = True
-    config['eval']['method'] = method
-    verbose = config['eval']['verbose']
+    config['training']['method'] = method
+    verbose = config['training']['verbose']
 
     model, checkpoint = load_model(config, verbose, last=last)
     #checkpoint = load_checkpoint(config)

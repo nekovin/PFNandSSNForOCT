@@ -2,6 +2,7 @@ import glob
 import os
 import numpy as np
 from skimage import io
+import re
 
 def load_patient_data(base_path, verbose=False):
     
@@ -35,10 +36,9 @@ def load_patient_data(base_path, verbose=False):
     return oct_scans
 
 
-###
 
 def load_patient_data(base_path, verbose=False):
-    import re
+    
 
     
     all_files = []
@@ -51,7 +51,7 @@ def load_patient_data(base_path, verbose=False):
         return []
     
     # Define the sorting function
-    def extract_number(filename):
+    def extract_number_key(filename):
         # Extract the number inside brackets using regex
         match = re.search(r'\((\d+)\)', os.path.basename(filename))
         if match:
@@ -59,7 +59,7 @@ def load_patient_data(base_path, verbose=False):
         return 0  # Default value if no number is found
     
     # Sort files
-    files = sorted(all_files, key=extract_number)
+    files = sorted(all_files, key=extract_number_key)
     
     if verbose:
         print(f"Found {len(files)} files")
