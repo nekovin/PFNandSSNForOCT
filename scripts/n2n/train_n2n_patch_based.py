@@ -1,21 +1,32 @@
 import os
 from ssm.trainers.n2_trainer import train_n2
+from ssm.utils.seed import set_seed
+from ssm.utils.config import get_config
 
-def main(schema):
+def main():
+
+    N2_CONFIG_PATH = os.environ.get("N2_CONFIG_PATH")
+
+    config = get_config(N2_CONFIG_PATH)
     
-    patient_count = 5
+    patient_count = config['training']['n_patients']
+
+    schema = "n2n"
 
     override_dict = {
         "training" : {
             "ablation": f"patient_count/{patient_count}_patients",
-            "n_images_per_patient": 40,
             "n_patients" : patient_count,
             "method" : schema
             }
         }
     
     N2_PATH = os.environ.get("N2_CONFIG_PATH")
-
+    
+    print(f"Training {schema} model")
+    set_seed(42)
+    train_n2(config_path=N2_PATH, schema=schema, ssm=False, override_config=override_dict)
+    set_seed(42)
     train_n2(config_path=N2_PATH, schema=schema, ssm=True, override_config=override_dict)
 
 if __name__ == "__main__":

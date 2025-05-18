@@ -1,7 +1,7 @@
 import os
-from ssm.trainers.n2_trainer import train_n2
+from ssm.trainers.n2_trainer import train_all_n2
 
-def main(schema):
+def main():
     
     patient_count = 10
 
@@ -13,9 +13,8 @@ def main(schema):
         }
     
     N2_PATH = os.environ.get("N2_CONFIG_PATH")
-
-    print(f"Training {schema} model")
-    train_n2(config_path=N2_PATH, schema=schema, ssm=False, override_config=override_dict)
+    train_all_n2(config_path=N2_PATH, ssm=False, override_config=override_dict)
+    train_all_n2(config_path=N2_PATH, ssm=True, override_config=override_dict)
 
 if __name__ == "__main__":
     main()

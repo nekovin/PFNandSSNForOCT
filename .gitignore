@@ -32,8 +32,6 @@ build/
 *.swp
 *.swo
 
-data/
-
 stage2/old
 
 ssn2v/outputs
@@ -57,3 +55,11 @@ noise2void
 
 *.npz
 *.json
+
+utils/old
+schemas/phf
+old/*
+configs
+src/ssm/old
+
+checkpoints_old
