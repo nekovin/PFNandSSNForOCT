@@ -5,20 +5,23 @@ from ssm.models import UNet, UNet2, LargeUNet, LargeUNetAttention, LargeUNet2, L
 from ssm.models.unet.small_unet import SmallUNet
 from ssm.models.unet.small_unet_att import SmallUNetAtt
 
-def load_model(config, verbose=False, last=False):
+def load_model(config, verbose=False, last=False, best=False):
     use_speckle = config['speckle_module']['use']
     eval_config = config['training']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
     method = eval_config['method']
     model = eval_config['model']
     if use_speckle:
-        best = config['speckle_module']['best']
-        if best:
+        best_loss = config['speckle_module']['best']
+        if best_loss:
             checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_best_checkpoint.pth"
         else:
             checkpoint_path = base_checkpoint_path + rf"{method}_{model}_ssm_last_checkpoint.pth"
     else:
         checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_checkpoint.pth"
+
+    if best:
+        checkpoint_path = base_checkpoint_path + rf"{method}_{model}_best_metrics_checkpoint.pth"
     
     device = eval_config['device']
     
@@ -86,7 +89,39 @@ def load_checkpoint(config, last=False):
     
     return checkpoint
 
-def evaluate_baseline(image, reference, method, config_path = None, override_config = None, last=False):
+def load_checkpoint(config, last=False, best=False):
+    eval_config = config['training']
+    base_checkpoint_path = eval_config['baselines_checkpoint_path']
+    ablation = eval_config['ablation'].format(n=config['training']['n_patients'])
+    method = eval_config['method']
+    model = eval_config['model']
+    
+    if best:
+        if config['speckle_module']['use']:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_best_metrics_checkpoint.pth"
+        else:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_best_metrics_checkpoint.pth"
+    elif config['speckle_module']['use']:
+        best_loss = config['speckle_module']['best']
+        if best_loss and not last:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_best_checkpoint.pth"
+        else:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_ssm_last_checkpoint.pth"
+    else:
+        if last:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_last_checkpoint.pth"
+        else:
+            checkpoint_path = base_checkpoint_path + ablation + rf"/{method}_{model}_best_checkpoint.pth"
+    
+    print(f"Checkpoint path: {checkpoint_path}")
+    
+    device = eval_config['device']
+    
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    
+    return checkpoint
+
+def evaluate_baseline(image, reference, method, config_path = None, override_config = None, last=False, best=False):
     
     config = get_config(config_path, override_config)
     
@@ -94,7 +129,7 @@ def evaluate_baseline(image, reference, method, config_path = None, override_con
     
     verbose = config['training']['verbose']
 
-    model, checkpoint = load_model(config, verbose, last=last)
+    model, checkpoint = load_model(config, verbose, last=last, best=best)
     #checkpoint = load_checkpoint(config, last=last)
     
     metrics, denoised = evaluate(image, reference, model, method)
@@ -105,7 +140,7 @@ def evaluate_baseline(image, reference, method, config_path = None, override_con
 
     return metrics, denoised
 
-def evaluate_ssm_constraint(image, reference, method, config_path, override_config = None, last=False):
+def evaluate_ssm_constraint(image, reference, method, config_path, override_config = None, last=False, best=False):
     
     config = get_config(config_path, override_config)
     
@@ -113,7 +148,7 @@ def evaluate_ssm_constraint(image, reference, method, config_path, override_conf
     config['training']['method'] = method
     verbose = config['training']['verbose']
 
-    model, checkpoint = load_model(config, verbose, last=last)
+    model, checkpoint = load_model(config, verbose, last=last, best=best)
     #checkpoint = load_checkpoint(config)
 
     metrics, denoised = evaluate(image, reference, model, method)

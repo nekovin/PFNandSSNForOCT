@@ -231,8 +231,6 @@ def process_batch(data_loader, model, criterion, optimizer, epoch, epochs, devic
             )
             
             if speckle_module is not None:
-                # Create flow components for visualization
-                # (simplified here - you might need to adjust)
                 flow_inputs_full = speckle_module(input_imgs)['flow_component'].detach()
                 flow_outputs_full = speckle_module(reconstructed_outputs)['flow_component'].detach()
                 

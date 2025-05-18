@@ -98,6 +98,7 @@ def train(config, method, ssm):
     alpha = 1
     starting_epoch = 0
     best_val_loss = float('inf')
+    best_metrics_score = float('-inf')
 
     save = train_config['save']
 
@@ -143,6 +144,7 @@ def train(config, method, ssm):
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             print("Model loaded successfully")
             print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['best_val_loss']}")
+            #best_metrics_score = checkpoint['metrics_score']
             starting_epoch = checkpoint['epoch']
             best_val_loss = checkpoint['val_loss']
         except Exception as e:
@@ -215,7 +217,8 @@ def train(config, method, ssm):
                     method=method,
                     octa_criterion=False,
                     threshold=train_config['threshold'],
-                    mask_ratio=train_config['mask_ratio'])
+                    mask_ratio=train_config['mask_ratio'],
+                    best_metrics_score=best_metrics_score)
             else:
                 model = train_n2v(
                     model,
@@ -237,7 +240,8 @@ def train(config, method, ssm):
                     method=method,
                     octa_criterion=False,
                     threshold=train_config['threshold'],
-                    mask_ratio=train_config['mask_ratio'])
+                    mask_ratio=train_config['mask_ratio'],
+                    best_metrics_score=best_metrics_score)
         elif method == "n2s":
             model = train_n2s(
                 model,

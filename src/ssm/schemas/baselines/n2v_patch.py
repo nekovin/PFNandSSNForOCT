@@ -1206,6 +1206,8 @@ def process_batch_n2v_patch(
     total_loss = 0.0
     patch_size = 64  # Choose appropriate patch size
     stride = 32      # Choose appropriate stride
+
+    metrics = None
     
     context_manager = torch.no_grad() if not optimizer else nullcontext()
     
@@ -1289,13 +1291,11 @@ def process_batch_n2v_patch(
             
             total_loss += batch_loss / len(raw1_patches)
             
-            # Visualize only the first batch if requested
             if visualize and batch_idx == 0:
                 # Flatten all output patches
                 output1_patches = torch.cat(all_output1_patches, dim=0)
                 output2_patches = torch.cat(all_output2_patches, dim=0)
                 
-                # Reconstruct full images
                 reconstructed_outputs1 = reconstruct_from_patches(
                     output1_patches, patch_locations1, raw1.shape, patch_size
                 )
@@ -1329,12 +1329,17 @@ def process_batch_n2v_patch(
                     }
                     
                 plot_images(images, titles, losses)
-            
-            # Update scheduler if provided and in evaluation mode
+
+                from ssm.utils import evaluate_oct_denoising
+
+                metrics = evaluate_oct_denoising(raw1[0][0].cpu().numpy(), reconstructed_outputs1[0][0].cpu().numpy())
+
             if scheduler is not None and not optimizer:
                 scheduler.step(batch_loss / len(raw1_patches))
-    
-    return total_loss / len(loader)
+    if metrics is not None:
+        return total_loss / len(loader), metrics
+    else:
+        return total_loss / len(loader)
 
 def create_blind_spot_input(input_imgs, mask):
     """
@@ -1486,7 +1491,7 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
 
 def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
-          speckle_module=None, alpha=1, save=False, method='n2v', octa_criterion=None, threshold=0.0, mask_ratio=0.1):
+          speckle_module=None, alpha=1, save=False, method='n2v', octa_criterion=None, threshold=0.0, mask_ratio=0.1, best_metrics_score=float('-inf')):
     """
     Train function that handles both Noise2Void and Noise2Self approaches.
     
@@ -1496,6 +1501,7 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
 
     last_checkpoint_path = checkpoint_path + f'_last_checkpoint.pth'
     best_checkpoint_path = checkpoint_path + f'_best_checkpoint.pth'
+    best_metrics_checkpoint_path = checkpoint_path + f'_best_metrics_checkpoint.pth'
 
     print(f"Saving checkpoints to {best_checkpoint_path}")
 
@@ -1513,11 +1519,18 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
         
         model.eval()
         with torch.no_grad():
-            val_loss = process_batch_n2v_patch(model, val_loader, criterion, mask_ratio,
+            val_loss, val_metrics = process_batch_n2v_patch(model, val_loader, criterion, mask_ratio,
                 optimizer=None, 
                 device='cuda',
                 speckle_module=speckle_module,
                 visualize=True)
+            
+            val_metrics_score = (
+                val_metrics.get('snr', 0) * 0.3 + 
+                val_metrics.get('cnr', 0) * 0.3 + 
+                val_metrics.get('enl', 0) * 0.2 + 
+                val_metrics.get('epi', 0) * 0.2
+            )
 
         print(f"Epoch [{epoch+1}/{starting_epoch+epochs}], Average Loss: {train_loss:.6f}")
         
@@ -1530,19 +1543,37 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
                 'optimizer_state_dict': optimizer.state_dict(),
                 'train_loss': train_loss,
                 'val_loss': val_loss,
-                'best_val_loss': best_val_loss
+                'best_val_loss': best_val_loss,
+                'metrics': val_metrics,
+                'metrics_score': val_metrics_score
             }, best_checkpoint_path)
+
+        if val_metrics_score > best_metrics_score  and save:
+            best_metrics_score = val_metrics_score
+            print(f"Saving best metrics model with score: {val_metrics_score:.4f}")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': train_loss,
+                'val_loss': val_loss,
+                'best_val_loss': best_val_loss,
+                'metrics': val_metrics,
+                'metrics_score': val_metrics_score
+            }, best_metrics_checkpoint_path)
     
-    if save:
-        print(f"Saving last model with val loss: {val_loss:.6f}")
-        torch.save({
-                    'epoch': epoch,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'train_loss': train_loss,
-                    'val_loss': val_loss,
-                    'best_val_loss': best_val_loss
-            }, last_checkpoint_path)
+        if save:
+            print(f"Saving last model with val loss: {val_loss:.6f}")
+            torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'train_loss': train_loss,
+                        'val_loss': val_loss,
+                        'best_val_loss': best_val_loss,
+                        'metrics': val_metrics,
+                        'metrics_score': val_metrics_score
+                }, last_checkpoint_path)
     
     elapsed_time = time.time() - start_time
     print(f"Training completed in {elapsed_time / 60:.2f} minutes")

@@ -61,3 +61,5 @@ schemas/phf
 old/*
 configs
 src/ssm/old
+
+checkpoints_old

@@ -286,9 +286,12 @@ def evaluate_oct_denoising(original, denoised, reference=None):
 
     metrics = {}
 
-    
-    metrics['psnr'] = calculate_psnr(denoised, reference)
-    metrics['ssim'] = calculate_ssim(denoised, reference)
+    if reference is None:
+        metrics['psnr'] = np.nan
+        metrics['ssim'] = np.nan
+    else:
+        metrics['psnr'] = calculate_psnr(denoised, reference)
+        metrics['ssim'] = calculate_ssim(denoised, reference)
     
     metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     

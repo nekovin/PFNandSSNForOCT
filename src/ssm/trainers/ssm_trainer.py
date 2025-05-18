@@ -91,12 +91,10 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
             'noise_loss': noise_loss
         })
 
-    # Calculate average losses for the epoch
     avg_loss = running_loss / len(dataloader)
     avg_flow_loss = running_flow_loss / len(dataloader)
     avg_noise_loss = running_noise_loss / len(dataloader)
     
-    # Only update history in training mode
     if is_training:
         history['loss'].append(avg_loss)
         history['flow_loss'].append(avg_flow_loss)
@@ -113,13 +111,11 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
             model, 
             batch_inputs[random_idx:random_idx+1], 
             batch_targets[random_idx:random_idx+1], 
-            #masked_tensor=masked_inputs[random_idx:random_idx+1][0][0].cpu().numpy(), 
             masked_tensor=None,
             epoch=epoch+1
         )
         plt.close()
         
-        #visualize_attention_maps(model, batch_inputs[random_idx:random_idx+1][0][0].cpu().numpy())
 
     return avg_loss
 
