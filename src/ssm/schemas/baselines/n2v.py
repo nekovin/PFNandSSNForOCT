@@ -1077,18 +1077,6 @@ def process_batch_n2v(
                     }
                     
                 plot_images(images, titles, losses)
-            
-            '''
-            if visualize:
-                clear_output(wait=True)
-                visualise_n2v(
-                    raw1=raw1.cpu().detach().numpy(),
-                    blind1=blind1.cpu().detach().numpy(),
-                    blind2=blind2.cpu().detach().numpy(),
-                    output1=outputs1.cpu().detach().numpy(),
-                    output2=outputs2.cpu().detach().numpy()
-                )
-            '''
     
     return total_loss / len(loader)
 

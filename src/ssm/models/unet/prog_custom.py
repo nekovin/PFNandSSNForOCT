@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 
-from ssm.models.unet.large_unet import LargeUNet
+from ssm.models.unet.large_unet_old import LargeUNet
 
 class ProgLargeUNet(LargeUNet):
     def __init__(self, in_channels=1, out_channels=1, bilinear=True):

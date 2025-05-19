@@ -20,13 +20,10 @@ class SmallUNetAtt(nn.Module):
         self.bottleneck_att = ChannelAttention(256, 256)
         
         self.up1 = Up(512, 128, bilinear)
-        
         self.up2 = Up(256, 64, bilinear)
-        
         self.up3 = Up(128, 32, bilinear)
-
         self.up4 = Up(64, 32, bilinear)
-        
+    
         self.outc = OutConv(32, out_channels)
     
     def forward(self, x):

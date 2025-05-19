@@ -21,10 +21,11 @@ def main():
     config = get_config(config_path)
 
     n_patients = config['training']['n_patients']
+    n_images_per_patient = config['training']['n_images_per_patient']
     
     override_config = {
         "eval" : {
-            "ablation": f"patient_count/{n_patients}_patients",
+            "ablation": f"patient_count/{n_patients}_patients/{n_images_per_patient}_images",
             "n_patients" : n_patients
             }
         }
