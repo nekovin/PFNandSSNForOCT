@@ -2,6 +2,7 @@ from ssm.utils.config import get_config
 from ssm.utils.eval_utils.evaluate import evaluate
 import torch
 from ssm.models import UNet, UNet2, LargeUNetAttention, LargeUNet2, LargeUNet3
+from ssm.models.unet.large_unet_attention import LargeUNetAtt
 from ssm.models.unet.large_unet_good import LargeUNet
 from ssm.models.unet.small_unet import SmallUNet
 from ssm.models.unet.small_unet_att import SmallUNetAtt
@@ -42,6 +43,8 @@ def load_model(config, verbose=False, last=False, best=False):
         model = SmallUNet(in_channels=1, out_channels=1).to(device)
     elif model == "SmallUNetAtt":
         model = SmallUNetAtt().to(device)
+    elif model == "LargeUNetAtt":
+        model = LargeUNetAtt(in_channels=1, out_channels=1).to(device)
     else:
         raise ValueError(f"Model {model} not supported")
 

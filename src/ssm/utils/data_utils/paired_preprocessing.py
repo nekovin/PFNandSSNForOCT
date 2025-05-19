@@ -179,7 +179,7 @@ def paired_preprocessing(start=1, n_patients=1, n_images_per_patient=10, diabete
             patient_id = extract_number(os.path.basename(patient_path))
                 
             data = load_patient_data(patient_path)
-            data = data[:n_images_per_patient]  # Limit to n_images_per_patient
+            data = data[:n_images_per_patient]
             print(f"Loaded {len(data)} images for patient {patient_id} (diabetes type {diabetes_type})")
             
             if len(data) == 0:
@@ -208,7 +208,7 @@ def paired_preprocessing(start=1, n_patients=1, n_images_per_patient=10, diabete
                     if image1.shape != (256, 256, 1) or image2.shape != (256, 256, 1):
                         print(f"WARNING: Unexpected image shape: {image1.shape}, {image2.shape}")
                         continue
-                    
+                
                     input_target.append([image1, image2])
             
             dataset_index += 1  # Use a sequential index for the dataset

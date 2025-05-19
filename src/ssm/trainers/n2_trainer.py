@@ -4,6 +4,7 @@ from ssm.models.unet.unet import UNet
 from ssm.models.unet.unet_2 import UNet2
 from ssm.models.unet.large_unet import LargeUNetAttention, LargeUNet2, LargeUNet3
 from ssm.models.unet.large_unet_good import LargeUNet
+from ssm.models.unet.large_unet_attention import LargeUNetAtt
 from ssm.models.ssm.ssm_attention import SpeckleSeparationUNetAttention
 from ssm.models.unet.small_unet import SmallUNet
 from ssm.models.unet.small_unet_att import SmallUNetAtt
@@ -18,6 +19,9 @@ from ssm.schemas.baselines.n2v_patch import train_n2v_patch
 import os
 import torch.optim as optim
 import torch
+
+import random
+from ssm.utils import load_sdoct_dataset, normalize_image_np
 
 def train_n2(config_path=None, schema=None, ssm=False, override_config=None):
     
@@ -85,12 +89,30 @@ def train(config, method, ssm):
         model = SmallUNet(in_channels=1, out_channels=1).to(device)
     elif train_config['model'] == 'SmallUNetAtt':
         model = SmallUNetAtt(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'LargeUNetAtt':
+        model = LargeUNetAtt(in_channels=1, out_channels=1).to(device)
     else:
         raise ValueError("Model not found")
 
-        
+    sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
+    dataset = load_sdoct_dataset(sdoct_path)
 
-    optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
+    import cv2
+    import numpy as np
+    sample = random.choice(list(dataset.keys()))
+    raw_image = dataset[sample]["raw"][0][0]
+    raw_image = raw_image.cpu().numpy()
+    print(f"Raw image shape: {raw_image.shape}")
+    resized = cv2.resize(raw_image, (256, 256), interpolation=cv2.INTER_LINEAR)
+    print(f"Resized image shape: {resized.shape}")
+    resized = normalize_image_np(resized)
+    #raw_image = resized.to(device)
+    resized = resized[:, :, np.newaxis]  # Add channel dimension
+    raw_image = torch.from_numpy(resized.transpose(2, 0, 1)).float()  # Transpose channels
+    raw_image = raw_image.unsqueeze(0) 
+    raw_image = raw_image.to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'], weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
 
     visualise = train_config['visualise']
@@ -175,7 +197,8 @@ def train(config, method, ssm):
                     save=save,
                     scheduler=scheduler,
                     best_metrics_score=best_metrics_score,
-                    train_config=train_config)
+                    train_config=train_config,
+                    sample=raw_image)
             else:
                 model = train_n2n(
                     model,

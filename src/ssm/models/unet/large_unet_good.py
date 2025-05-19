@@ -28,24 +28,43 @@ class LargeUNet(nn.Module):
         self.up5 = Up(64, 32, bilinear)     # 32 + 32 = 64 input channels
         
         self.outc = OutConv(32, out_channels)
+
+        self.dropout = nn.Dropout2d(0.1)
     
     def forward(self, x):
         # Encoder path
         x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)
+        x1_drop = self.dropout(x1)  # Apply dropout but keep x1 intact for skip connection
         
-        # Bottleneck with 512 channels
+        x2 = self.down1(x1_drop)
+        x2_drop = self.dropout(x2)  # Apply dropout but keep x2 intact
+        
+        x3 = self.down2(x2_drop)
+        x3_drop = self.dropout(x3)
+        
+        x4 = self.down3(x3_drop)
+        x4_drop = self.dropout(x4)
+        
+        x5 = self.down4(x4_drop)
+        
+        # No dropout before bottleneck
         x6 = self.bottleneck(x5)
         
-        # Decoder path with all skip connections
+        # Decoder path with all skip connections using original (non-dropped) features
         x = self.up1(x6, x5)
+        x = self.dropout(x)
+        
         x = self.up2(x, x4)
+        x = self.dropout(x)
+        
         x = self.up3(x, x3)
+        x = self.dropout(x)
+        
         x = self.up4(x, x2)
-        x = self.up5(x, x1)  # Critical final upsampling
+        x = self.dropout(x)
+        
+        x = self.up5(x, x1)
+        # No dropout before final output
         
         x = self.outc(x)
         

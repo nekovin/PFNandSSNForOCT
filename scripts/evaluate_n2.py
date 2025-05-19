@@ -32,14 +32,54 @@ def main(method=None):
 
     # random sample
     sample = random.choice(list(dataset.keys()))
-    raw_image = dataset[sample]["raw"]
+    raw_image = dataset[sample]["raw"][0][0]
     reference = dataset[sample]["avg"][0][0]
+
+
+    def normalise_sample(raw_image, reference):
+        '''
+        sample = random.choice(list(dataset.keys()))
+        raw_image = dataset[sample]["raw"][0][0]
+        raw_image = raw_image.cpu().numpy()
+        print(f"Raw image shape: {raw_image.shape}")
+        resized = cv2.resize(raw_image, (256, 256), interpolation=cv2.INTER_LINEAR)
+        print(f"Resized image shape: {resized.shape}")
+        resized = normalize_image_np(resized)
+        #raw_image = resized.to(device)
+        raw_image = torch.from_numpy(resized).float()
+        raw_image = raw_image.unsqueeze(0).unsqueeze(0)
+        raw_image = raw_image.to(device)
+    '''
+        import cv2
+        from ssm.utils import normalize_image_np
+        
+        # Normalise the raw image
+        raw_image = raw_image.cpu().numpy()
+        resized = cv2.resize(raw_image, (256, 256), interpolation=cv2.INTER_LINEAR)
+        resized = normalize_image_np(resized)
+        raw_image = torch.from_numpy(resized).float()
+        raw_image = raw_image.unsqueeze(0).unsqueeze(0)
+        raw_image = raw_image.to(device)
+
+        # Normalise the reference image
+        reference = reference.cpu().numpy()
+        resized_ref = cv2.resize(reference, (256, 256), interpolation=cv2.INTER_LINEAR)
+        resized_ref = normalize_image_np(resized_ref)
+        reference = torch.from_numpy(resized_ref).float()
+        reference = reference.unsqueeze(0).unsqueeze(0)
+        reference = reference.to(device)
+
+        return raw_image, reference
+    
+    raw_image, reference = normalise_sample(raw_image, reference)
+        
+
 
 
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     ax[0].imshow(raw_image.cpu().numpy()[0][0], cmap="gray")
     ax[0].set_title("Raw Image")
-    ax[1].imshow(reference.cpu().numpy(), cmap="gray")
+    ax[1].imshow(reference.cpu().numpy()[0][0], cmap="gray")
     ax[1].set_title("Reference Image")
     plt.show()
 
