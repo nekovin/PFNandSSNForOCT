@@ -21,7 +21,7 @@ from ssm.utils.config import get_config
 
 from ssm.utils import paired_octa_preprocessing, paired_octa_preprocessing_binary
 
-from ssm.models.unet.large_unet import LargeUNetAttention
+from ssm.models.unet.large_unet_old import LargeUNetAttention
 
 def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):
     running_loss = 0.0

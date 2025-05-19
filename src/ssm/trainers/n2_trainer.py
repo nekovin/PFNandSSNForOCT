@@ -2,7 +2,9 @@ from ssm.data import get_paired_loaders
 from ssm.utils.config import get_config
 from ssm.models.unet.unet import UNet
 from ssm.models.unet.unet_2 import UNet2
-from ssm.models.unet.large_unet import LargeUNet, LargeUNetAttention, LargeUNet2, LargeUNet3
+from ssm.models.unet.large_unet import LargeUNetAttention, LargeUNet2, LargeUNet3
+from ssm.models.unet.large_unet_good import LargeUNet
+from ssm.models.unet.large_unet_attention import LargeUNetAtt
 from ssm.models.ssm.ssm_attention import SpeckleSeparationUNetAttention
 from ssm.models.unet.small_unet import SmallUNet
 from ssm.models.unet.small_unet_att import SmallUNetAtt
@@ -18,6 +20,9 @@ import os
 import torch.optim as optim
 import torch
 
+import random
+from ssm.utils import load_sdoct_dataset, normalize_image_np
+
 def train_n2(config_path=None, schema=None, ssm=False, override_config=None):
     
     if config_path is None:
@@ -29,7 +34,6 @@ def train_n2(config_path=None, schema=None, ssm=False, override_config=None):
     config = get_config(config_path, override_config)
 
     train(config, schema, ssm)
-
 
 def train(config, method, ssm):
 
@@ -43,7 +47,7 @@ def train(config, method, ssm):
     n_images_per_patient = train_config['n_images_per_patient']
     batch_size = train_config['batch_size']
     start = train_config['start_patient'] if train_config['start_patient'] else 1
-    ablation = train_config['ablation'].format(n=n_patients)
+    ablation = train_config['ablation'].format(n=n_patients, n_images=n_images_per_patient)
 
     train_loader, val_loader = get_paired_loaders(start, n_patients, n_images_per_patient, batch_size)
     print(f"Train loader size: {len(train_loader.dataset)}")
@@ -85,12 +89,30 @@ def train(config, method, ssm):
         model = SmallUNet(in_channels=1, out_channels=1).to(device)
     elif train_config['model'] == 'SmallUNetAtt':
         model = SmallUNetAtt(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'LargeUNetAtt':
+        model = LargeUNetAtt(in_channels=1, out_channels=1).to(device)
     else:
         raise ValueError("Model not found")
 
-        
+    sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
+    dataset = load_sdoct_dataset(sdoct_path)
 
-    optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'])
+    import cv2
+    import numpy as np
+    sample = random.choice(list(dataset.keys()))
+    raw_image = dataset[sample]["raw"][0][0]
+    raw_image = raw_image.cpu().numpy()
+    print(f"Raw image shape: {raw_image.shape}")
+    resized = cv2.resize(raw_image, (256, 256), interpolation=cv2.INTER_LINEAR)
+    print(f"Resized image shape: {resized.shape}")
+    resized = normalize_image_np(resized)
+    #raw_image = resized.to(device)
+    resized = resized[:, :, np.newaxis]  # Add channel dimension
+    raw_image = torch.from_numpy(resized.transpose(2, 0, 1)).float()  # Transpose channels
+    raw_image = raw_image.unsqueeze(0) 
+    raw_image = raw_image.to(device)
+
+    optimizer = optim.Adam(model.parameters(), lr=train_config['learning_rate'], weight_decay=1e-4)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5, factor=0.5)
 
     visualise = train_config['visualise']
@@ -136,15 +158,15 @@ def train(config, method, ssm):
 
     if train_config['load']:
         try:
-            checkpoint = torch.load(checkpoint_path + f'_best_checkpoint.pth', map_location=device)
+            checkpoint = torch.load(checkpoint_path + f'_patched_best_checkpoint.pth', map_location=device)
             print("Loading model from checkpoint...")
-            print(checkpoint_path + f'_best_checkpoint.pth')
+            print(checkpoint_path + f'_patched_best_checkpoint.pth')
             print(checkpoint.keys())
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             print("Model loaded successfully")
             print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['best_val_loss']}")
-            #best_metrics_score = checkpoint['metrics_score']
+            best_metrics_score = checkpoint['metrics_score']
             starting_epoch = checkpoint['epoch']
             best_val_loss = checkpoint['val_loss']
         except Exception as e:
@@ -173,7 +195,10 @@ def train(config, method, ssm):
                     speckle_module=speckle_module,
                     alpha=alpha,
                     save=save,
-                    scheduler=scheduler)
+                    scheduler=scheduler,
+                    best_metrics_score=best_metrics_score,
+                    train_config=train_config,
+                    sample=raw_image)
             else:
                 model = train_n2n(
                     model,
@@ -192,10 +217,14 @@ def train(config, method, ssm):
                     speckle_module=speckle_module,
                     alpha=alpha,
                     save=save,
-                    scheduler=scheduler)
+                    scheduler=scheduler,
+                    best_metrics_score=best_metrics_score,
+                    train_config=train_config
+                    )
             
         elif method == "n2v":
             if patch:
+                print("Training n2v with patch")
 
                 model = train_n2v_patch(
                     model,
@@ -218,7 +247,9 @@ def train(config, method, ssm):
                     octa_criterion=False,
                     threshold=train_config['threshold'],
                     mask_ratio=train_config['mask_ratio'],
-                    best_metrics_score=best_metrics_score)
+                    best_metrics_score=best_metrics_score,
+                    scheduler=scheduler,
+                    train_config=train_config)
             else:
                 model = train_n2v(
                     model,
@@ -241,7 +272,8 @@ def train(config, method, ssm):
                     octa_criterion=False,
                     threshold=train_config['threshold'],
                     mask_ratio=train_config['mask_ratio'],
-                    best_metrics_score=best_metrics_score)
+                    best_metrics_score=best_metrics_score,
+                    scheduler=scheduler)
         elif method == "n2s":
             model = train_n2s(
                 model,
@@ -365,9 +397,9 @@ def train_all_three(config, ssm):
 
         if train_config['load']:
             try:
-                checkpoint = torch.load(checkpoint_path + f'_best_checkpoint.pth', map_location=device)
+                checkpoint = torch.load(checkpoint_path + f'patched_best_checkpoint.pth', map_location=device)
                 print("Loading model from checkpoint...")
-                print(checkpoint_path + f'_best_checkpoint.pth')
+                print(checkpoint_path + f'patched_best_checkpoint.pth')
                 print(checkpoint.keys())
                 model.load_state_dict(checkpoint['model_state_dict'])
                 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

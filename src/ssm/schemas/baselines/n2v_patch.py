@@ -1234,8 +1234,7 @@ def process_batch_n2v_patch(
             for i in range(0, len(raw1_patches), sub_batch_size):
                 raw1_sub_batch = raw1_patches[i:i+sub_batch_size]
                 raw2_sub_batch = raw2_patches[i:i+sub_batch_size]
-                
-                # Create masks for blind spot
+
                 mask = torch.bernoulli(torch.full((raw1_sub_batch.size(0), 1, raw1_sub_batch.size(2), raw1_sub_batch.size(3)), 
                                             mask_ratio, device=device))
                 
@@ -1269,6 +1268,7 @@ def process_batch_n2v_patch(
                     n2v_loss2 = criterion(outputs2[mask > 0], raw2_sub_batch[mask > 0])
 
                     sub_loss = n2v_loss1 + n2v_loss2 + flow_loss1 * alpha + flow_loss2 * alpha
+                    #sub_loss = (n2v_loss1 + n2v_loss2 + flow_loss1 * alpha + flow_loss2 * alpha) / ((len(raw1_patches) + sub_batch_size - 1) // sub_batch_size)
 
                 else:
                     outputs1 = model(blind1)
@@ -1282,12 +1282,12 @@ def process_batch_n2v_patch(
                     sub_loss = n2v_loss1 + n2v_loss2
                 
                 batch_loss += sub_loss.item() * len(raw1_sub_batch)
-                
-                if optimizer:
-                    optimizer.zero_grad()
-                    sub_loss.backward()
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                    optimizer.step()
+            
+            if optimizer:
+                optimizer.zero_grad()
+                sub_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
             
             total_loss += batch_loss / len(raw1_patches)
             
@@ -1334,12 +1334,12 @@ def process_batch_n2v_patch(
 
                 metrics = evaluate_oct_denoising(raw1[0][0].cpu().numpy(), reconstructed_outputs1[0][0].cpu().numpy())
 
-            if scheduler is not None and not optimizer:
-                scheduler.step(batch_loss / len(raw1_patches))
     if metrics is not None:
         return total_loss / len(loader), metrics
     else:
         return total_loss / len(loader)
+\
+
 
 def create_blind_spot_input(input_imgs, mask):
     """
@@ -1491,7 +1491,8 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
 
 def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
-          speckle_module=None, alpha=1, save=False, method='n2v', octa_criterion=None, threshold=0.0, mask_ratio=0.1, best_metrics_score=float('-inf')):
+          speckle_module=None, alpha=1, save=False, method='n2v', octa_criterion=None, threshold=0.0, mask_ratio=0.1, best_metrics_score=float('-inf'),
+          scheduler=None, train_config=None):
     """
     Train function that handles both Noise2Void and Noise2Self approaches.
     
@@ -1499,9 +1500,9 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
         method (str): 'n2v' for Noise2Void or 'n2s' for Noise2Self
     """
 
-    last_checkpoint_path = checkpoint_path + f'_last_checkpoint.pth'
-    best_checkpoint_path = checkpoint_path + f'_best_checkpoint.pth'
-    best_metrics_checkpoint_path = checkpoint_path + f'_best_metrics_checkpoint.pth'
+    last_checkpoint_path = checkpoint_path + f'_patched_last_checkpoint.pth'
+    best_checkpoint_path = checkpoint_path + f'_patched_best_checkpoint.pth'
+    best_metrics_checkpoint_path = checkpoint_path + f'_patched_best_metrics_checkpoint.pth'
 
     print(f"Saving checkpoints to {best_checkpoint_path}")
 
@@ -1531,6 +1532,9 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
                 val_metrics.get('enl', 0) * 0.2 + 
                 val_metrics.get('epi', 0) * 0.2
             )
+        
+        if scheduler is not None:
+            scheduler.step(val_loss)
 
         print(f"Epoch [{epoch+1}/{starting_epoch+epochs}], Average Loss: {train_loss:.6f}")
         
@@ -1545,7 +1549,8 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
                 'val_loss': val_loss,
                 'best_val_loss': best_val_loss,
                 'metrics': val_metrics,
-                'metrics_score': val_metrics_score
+                'metrics_score': val_metrics_score,
+                'train_config': train_config
             }, best_checkpoint_path)
 
         if val_metrics_score > best_metrics_score  and save:
@@ -1559,7 +1564,8 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
                 'val_loss': val_loss,
                 'best_val_loss': best_val_loss,
                 'metrics': val_metrics,
-                'metrics_score': val_metrics_score
+                'metrics_score': val_metrics_score,
+                'train_config': train_config
             }, best_metrics_checkpoint_path)
     
         if save:
@@ -1572,7 +1578,8 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
                         'val_loss': val_loss,
                         'best_val_loss': best_val_loss,
                         'metrics': val_metrics,
-                        'metrics_score': val_metrics_score
+                        'metrics_score': val_metrics_score,
+                        'train_config': train_config
                 }, last_checkpoint_path)
     
     elapsed_time = time.time() - start_time

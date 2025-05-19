@@ -17,6 +17,7 @@ class SmallUNet(nn.Module):
         self.down3 = Down(128, 256)
         
         self.bottleneck = DoubleConv(256, 256)
+
         
         self.up1 = Up(512, 128, bilinear)
         self.up2 = Up(256, 64, bilinear)

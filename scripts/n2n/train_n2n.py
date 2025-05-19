@@ -10,12 +10,13 @@ def main():
     config = get_config(N2_CONFIG_PATH)
     
     patient_count = config['training']['n_patients']
+    n_images = config['training']['n_images_per_patient']
 
     schema = "n2n"
 
     override_dict = {
         "training" : {
-            "ablation": f"patient_count/{patient_count}_patients",
+            "ablation": f"patient_count/{patient_count}_patients/{n_images}_images",
             "n_patients" : patient_count,
             "method" : schema
             }
@@ -25,7 +26,7 @@ def main():
     
     print(f"Training {schema} model")
     set_seed(42)
-    train_n2(config_path=N2_PATH, schema=schema, ssm=False, override_config=override_dict)
+     #train_n2(config_path=N2_PATH, schema=schema, ssm=False, override_config=override_dict)
     set_seed(42)
     train_n2(config_path=N2_PATH, schema=schema, ssm=True, override_config=override_dict)
 
