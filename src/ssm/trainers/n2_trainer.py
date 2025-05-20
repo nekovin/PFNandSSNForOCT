@@ -172,6 +172,8 @@ def train(config, method, ssm):
         except Exception as e:
             print(f"Error loading model: {e}")
             print("Starting training from scratch.")
+
+    print("Alpha: ", alpha)
     
     if train_config['train']:
         patch = train_config['patch']
@@ -198,7 +200,9 @@ def train(config, method, ssm):
                     scheduler=scheduler,
                     best_metrics_score=best_metrics_score,
                     train_config=train_config,
-                    sample=raw_image)
+                    sample=raw_image,
+                    patch_size=train_config['patch_size'],
+                    stride=train_config['stride'])
             else:
                 model = train_n2n(
                     model,
@@ -249,7 +253,10 @@ def train(config, method, ssm):
                     mask_ratio=train_config['mask_ratio'],
                     best_metrics_score=best_metrics_score,
                     scheduler=scheduler,
-                    train_config=train_config)
+                    train_config=train_config,
+                    patch_size=train_config['patch_size'], 
+                    stride=train_config['stride']
+                    )
             else:
                 model = train_n2v(
                     model,

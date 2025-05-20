@@ -84,90 +84,22 @@ def main(method=None):
     
     fig, ax = plt.subplots(1, 1, figsize=(15, 5))
 
-    fig, ax = plt.subplots(3, 2, figsize=(15, 15))
-
     metrics = {}
-    metrics_last = {}
-    metrics_best = {}
-    all_metrics = {}
 
-    # Best checkpoints
     try:    
-        n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config)
-        metrics[f'{method}'] = n2v_metrics
-        all_metrics[f'{method}'] = n2v_metrics
-        ax[0][0].imshow(n2v_denoised, cmap="gray")
+        prog_metrics, prog_image = evaluate_progressssive_fusion_unet(raw_image, reference, device)
+        metrics['pfn'] = prog_metrics
+        ax[0][0].imshow(prog_image, cmap="gray")
         ax[0][0].set_title(f"{method} Denoised")
     except Exception as e:
         print(f"Error evaluating n2v: {e}")
         n2v_metrics = None
         n2v_denoised = None
 
-    try:
-        n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config)
-        metrics[f'{method}_ssm'] = n2v_ssm_metrics
-        all_metrics[f'{method}_ssm'] = n2v_ssm_metrics
-        ax[0][1].imshow(n2v_ssm_denoised, cmap="gray")
-        ax[0][1].set_title(f"{method} SSM Denoised")
-    except Exception as e:
-        print(f"Error evaluating n2v ssm: {e}")
-        n2v_ssm_metrics = None
-        n2v_ssm_denoised = None
-
-    # Last checkpoints
-    try:
-        n2v_metrics_last, n2v_denoised_last = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, last=True)
-        metrics_last[f'{method}'] = n2v_metrics_last
-        all_metrics[f'{method}_last'] = n2v_metrics_last
-        ax[1][0].imshow(n2v_denoised_last, cmap="gray")
-        ax[1][0].set_title(f"{method} Denoised Last")
-    except Exception as e:
-        print(f"Error evaluating n2v last: {e}")
-        n2v_metrics_last = None
-        n2v_denoised_last = None
-
-    try:
-        n2v_ssm_metrics_last, n2v_ssm_denoised_last = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, last=True)
-        metrics_last[f'{method}_ssm'] = n2v_ssm_metrics_last
-        all_metrics[f'{method}_ssm_last'] = n2v_ssm_metrics_last
-        ax[1][1].imshow(n2v_ssm_denoised_last, cmap="gray")
-        ax[1][1].set_title(f"{method} SSM Denoised Last")
-    except Exception as e:
-        print(f"Error evaluating n2v ssm last: {e}")
-        n2v_ssm_metrics_last = None
-        n2v_ssm_denoised_last = None
-
-    # Best metrics checkpoints
-    try:
-        n2v_metrics_best, n2v_denoised_best = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, best=True)
-        metrics_best[f'{method}'] = n2v_metrics_best
-        all_metrics[f'{method}_best'] = n2v_metrics_best
-        ax[2][0].imshow(n2v_denoised_best, cmap="gray")
-        ax[2][0].set_title(f"{method} Denoised Best")
-    except Exception as e:
-        print(f"Error evaluating n2v best: {e}")
-        n2v_metrics_best = None
-        n2v_denoised_best = None
-
-    try:
-        n2v_ssm_metrics_best, n2v_ssm_denoised_best = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, best=True)
-        metrics_best[f'{method}_ssm'] = n2v_ssm_metrics_best
-        all_metrics[f'{method}_ssm_best'] = n2v_ssm_metrics_best
-        ax[2][1].imshow(n2v_ssm_denoised_best, cmap="gray")
-        ax[2][1].set_title(f"{method} SSM Denoised Best")
-    except Exception as e:
-        print(f"Error evaluating n2v ssm best: {e}")
-        n2v_ssm_metrics_best = None
-        n2v_ssm_denoised_best = None
-
     display_metrics(metrics)
-    display_metrics(metrics_last)
-    display_metrics(metrics_best)
 
     fig.tight_layout()
     plt.show()
-
-    ###
         
 
 if __name__ == "__main__":

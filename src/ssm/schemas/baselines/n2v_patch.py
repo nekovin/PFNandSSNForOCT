@@ -1195,7 +1195,9 @@ def process_batch_n2v_patch(
         speckle_module=None,
         visualize=False,
         alpha=1.0,
-        scheduler=None
+        scheduler=None,
+        patch_size = 64,  # Choose appropriate patch size
+        stride = 32 
         ):
     
     if optimizer: 
@@ -1204,8 +1206,7 @@ def process_batch_n2v_patch(
         model.eval()
     
     total_loss = 0.0
-    patch_size = 64  # Choose appropriate patch size
-    stride = 32      # Choose appropriate stride
+         # Choose appropriate stride
 
     metrics = None
     
@@ -1492,7 +1493,7 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
 def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
           speckle_module=None, alpha=1, save=False, method='n2v', octa_criterion=None, threshold=0.0, mask_ratio=0.1, best_metrics_score=float('-inf'),
-          scheduler=None, train_config=None):
+          scheduler=None, train_config=None, patch_size=64, stride=32):
     """
     Train function that handles both Noise2Void and Noise2Self approaches.
     
@@ -1516,7 +1517,11 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
             optimizer=optimizer, 
             device='cuda',
             speckle_module=speckle_module,
-            visualize=False)
+            visualize=False,
+            alpha=alpha,
+            scheduler=scheduler,
+            patch_size = patch_size,
+            stride = stride)
         
         model.eval()
         with torch.no_grad():
@@ -1524,7 +1529,11 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
                 optimizer=None, 
                 device='cuda',
                 speckle_module=speckle_module,
-                visualize=True)
+                visualize=True,
+                alpha=alpha,
+                scheduler=scheduler,
+                patch_size = patch_size,
+                stride = stride)
             
             val_metrics_score = (
                 val_metrics.get('snr', 0) * 0.3 + 

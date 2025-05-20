@@ -27,8 +27,8 @@ def main():
     print(f"Training {schema} model")
     set_seed(42)
     train_n2(config_path=N2_PATH, schema=schema, ssm=False, override_config=override_dict)
-    #set_seed(42)
-    #train_n2(config_path=N2_PATH, schema=schema, ssm=True, override_config=override_dict)
+    set_seed(42)
+    train_n2(config_path=N2_PATH, schema=schema, ssm=True, override_config=override_dict)
 
 if __name__ == "__main__":
     main()

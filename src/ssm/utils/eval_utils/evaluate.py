@@ -70,6 +70,11 @@ def evaluate(image, reference, model, method):
             original_image = image.cpu().numpy()
 
     denoised = denoise_image(model, image_tensor, device='cuda')
+
+    denoised = denoised[-1]
+
+    print(f"Image shape: {image_tensor.shape}")
+    print(f"Denoised shape: {denoised.shape}")
     
     # Convert denoised to numpy
     if isinstance(denoised, torch.Tensor):

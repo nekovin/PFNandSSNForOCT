@@ -373,3 +373,103 @@ def plot_computation_graph(model, loss, speckle_module):
     # Create visualization
     dot = make_dot(loss, params=dict(list(model.named_parameters()) + list(speckle_module.named_parameters())))
     dot.render('results/computation_graph', format='png')
+
+#######
+
+from ssm.utils.data_utils.patch_processing import extract_patches, reconstruct_from_patches
+
+def visualize_progress_patch(model, input_tensor, target_tensor, masked_tensor, epoch, predicted_flow=None, predicted_noise=None):
+    """
+    Visualize the current model's output during training
+    
+    Args:
+        model: Current model
+        input_tensor: Input tensor [1, 1, H, W]
+        target_tensor: Target tensor [1, 1, H, W]
+        masked_tensor: Optional masked tensor
+        epoch: Current epoch number
+        predicted_flow: Pre-computed flow component (optional)
+        predicted_noise: Pre-computed noise component (optional)
+    """
+    model.eval()
+    
+    # If we don't have pre-computed outputs, compute them
+    if predicted_flow is None or predicted_noise is None:
+        with torch.no_grad():
+            # For full images, we need to use the patching approach
+            patches, locations = extract_patches(input_tensor, patch_size=64)
+            
+            # Process patches in batches to avoid memory issues
+            flow_patches = []
+            noise_patches = []
+            patch_batch_size = 8  # Adjust based on your GPU memory
+            
+            for i in range(0, len(patches), patch_batch_size):
+                batch_patches = patches[i:i+patch_batch_size]
+                outputs = model(batch_patches)
+                flow_patches.append(outputs['flow_component'])
+                noise_patches.append(outputs['noise_component'])
+            
+            # Concatenate results
+            flow_patches = torch.cat(flow_patches, dim=0)
+            noise_patches = torch.cat(noise_patches, dim=0)
+            
+            # Reconstruct full images
+            predicted_flow = reconstruct_from_patches(flow_patches, locations, input_tensor.shape, patch_size=64)
+            predicted_noise = reconstruct_from_patches(noise_patches, locations, input_tensor.shape, patch_size=64)
+    
+    def adaptive_threshold(denoised_img, sensitivity=0.02):
+        # Get an estimate of noise level from background
+        bg_mask = denoised_img < np.percentile(denoised_img, 50)
+        noise_std = np.std(denoised_img[bg_mask])
+        
+        # Set threshold as a multiple of background noise
+        threshold = sensitivity * noise_std
+        return np.maximum(denoised_img - threshold, 0)
+    
+    # Get components
+    input_np = input_tensor[0, 0].cpu().numpy()
+    target_np = target_tensor[0, 0].cpu().numpy()
+    flow_np = predicted_flow[0, 0].cpu().numpy()
+    noise_np = predicted_noise[0, 0].cpu().numpy()
+    denoised_np = input_np - noise_np
+    denoised_np = adaptive_threshold(denoised_np, sensitivity=0.02)
+    
+    # Create visualization
+    fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+    
+    # Row 1: Original data
+    axes[0, 0].imshow(input_np, cmap='gray')
+    axes[0, 0].set_title("Input")
+    axes[0, 0].axis('off')
+    
+    axes[0, 1].imshow(target_np, cmap='gray')
+    axes[0, 1].set_title("Target")
+    axes[0, 1].axis('off')
+    
+    # Row 2: Model outputs
+    axes[1, 0].imshow(flow_np, cmap='gray')
+    axes[1, 0].set_title("Flow Component")
+    axes[1, 0].axis('off')
+    
+    axes[1, 1].imshow(noise_np, cmap='gray')
+    axes[1, 1].set_title("Noise Component")
+    axes[1, 1].axis('off')
+    
+    if masked_tensor is not None:
+        masked_np = masked_tensor[0, 0].cpu().numpy() if isinstance(masked_tensor, torch.Tensor) else masked_tensor
+        axes[1, 2].imshow(masked_np, cmap='gray')
+        axes[1, 2].set_title("Masked Tensor")
+    else:
+        axes[1, 2].set_title("No Masked Tensor")
+    axes[1, 2].axis('off')
+
+    # Normalize flow component for visualization
+    normalized_flow = normalize_image(flow_np)
+    axes[0, 2].imshow(normalized_flow, cmap='gray')
+    axes[0, 2].set_title("Flow Component (Normalized)")
+    axes[0, 2].axis('off')
+    
+    plt.suptitle(f"Training Progress - Epoch {epoch}")
+    plt.tight_layout()
+    plt.show()

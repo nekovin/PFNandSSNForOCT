@@ -180,7 +180,7 @@ class SpeckleSeparationUNetAttention(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(feature_dim, input_channels, kernel_size=1),
             #nn.Sigmoid() 
-            nn.Sigmoid()
+            nn.ReLU()
         )
         
         self.noise_branch = nn.Sequential(

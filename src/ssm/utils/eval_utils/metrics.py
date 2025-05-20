@@ -297,6 +297,7 @@ def evaluate_oct_denoising(original, denoised, reference=None):
     
     roi_masks = auto_select_roi(denoised)
     if len(roi_masks) >= 2:
+        print("Using auto-selected ROIs for CNR calculation.")
         metrics['cnr'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1]) - calculate_cnr(original, roi_masks[0], roi_masks[1])
     else:
         metrics['cnr'] = calculate_cnr_whole(denoised) - calculate_cnr_whole(original)
