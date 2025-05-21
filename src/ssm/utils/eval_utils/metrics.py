@@ -282,6 +282,41 @@ def calculate_cnr_whole(image):
     
     return cnr_db
 
+def auto_select_roi_using_flow(img, device='cuda'):
+
+    from ssm.models import SpeckleSeparationUNetAttention
+
+    speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)
+    try:
+        print("Loading ssm model from checkpoint...")
+        ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\SSM_mse_best.pth"
+        ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
+        speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
+        speckle_module.to(device)
+        speckle_module.eval()
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        print("Starting training from scratch.")
+        raise e 
+
+    # Convert numpy array to tensor
+    if len(img.shape) == 2:
+        img_tensor = torch.from_numpy(img).unsqueeze(0).unsqueeze(0).float().to(device)
+    else:
+        img_tensor = torch.from_numpy(img).unsqueeze(0).float().to(device)
+    
+    with torch.no_grad():
+        output = speckle_module(img_tensor)
+        flow = output['flow_component'].cpu().numpy()[0, 0]
+    
+    foreground_mask = flow > 0.1 * flow.max()
+    background_mask = flow < 0.1 * flow.max()
+    #foreground_mask = flow  # Use raw flow values as "weights" rather than binary mask
+    #background_mask = 1.0 - flow
+
+    
+    return [foreground_mask, background_mask]
+
 def evaluate_oct_denoising(original, denoised, reference=None):
 
     metrics = {}
@@ -295,7 +330,14 @@ def evaluate_oct_denoising(original, denoised, reference=None):
     
     metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     
-    roi_masks = auto_select_roi(denoised)
+    try:
+        roi_masks = auto_select_roi_using_flow(denoised)
+        print("Using auto-selected ROIs Using Flow for CNR calculation.")
+    except Exception as e:
+        raise e
+        roi_masks = auto_select_roi(denoised)
+        print(f"Using AutoSelect ROI{e}")
+
     if len(roi_masks) >= 2:
         print("Using auto-selected ROIs for CNR calculation.")
         metrics['cnr'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1]) - calculate_cnr(original, roi_masks[0], roi_masks[1])

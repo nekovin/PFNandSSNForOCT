@@ -155,5 +155,5 @@ def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
         except Exception as e:
             print(f"Error processing patient {patient}: {e}")
     
-    print(f"Successfully loaded {len(sdoct_data)} patients")
+    print(f"Successfully loaded {len(sdoct_data)} SDOCT patients")
     return sdoct_data

@@ -190,7 +190,8 @@ class SpeckleSeparationUNetAttention(nn.Module):
             nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
             nn.BatchNorm2d(feature_dim),
             nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, input_channels, kernel_size=1)
+            nn.Conv2d(feature_dim, input_channels, kernel_size=1),
+            nn.Sigmoid()
         )
         
         # Upsampling layer

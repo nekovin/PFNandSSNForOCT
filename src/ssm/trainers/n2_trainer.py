@@ -16,6 +16,8 @@ from ssm.schemas.baselines.n2s import train_n2s
 from ssm.schemas.baselines.n2n_patch import train_n2n_patch
 from ssm.schemas.baselines.n2v_patch import train_n2v_patch
 
+from ssm.models.unet.blind_large_unet_attention import BlindLargeUNetAtt
+
 import os
 import torch.optim as optim
 import torch
@@ -93,6 +95,7 @@ def train(config, method, ssm):
         model = LargeUNetAtt(in_channels=1, out_channels=1).to(device)
     else:
         raise ValueError("Model not found")
+
 
     sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
     dataset = load_sdoct_dataset(sdoct_path)
@@ -254,8 +257,10 @@ def train(config, method, ssm):
                     best_metrics_score=best_metrics_score,
                     scheduler=scheduler,
                     train_config=train_config,
+                    sample=raw_image,
                     patch_size=train_config['patch_size'], 
-                    stride=train_config['stride']
+                    stride=train_config['stride'],
+                    patience_count=train_config['patience'],
                     )
             else:
                 model = train_n2v(

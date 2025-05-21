@@ -1,6 +1,7 @@
 from .unet.unet import *
 
 from .unet.large_unet_good import *
+from .unet.blind_large_unet_attention import *
 from .unet.large_unet import *
 from .unet.prog_custom import *
 from .unet.prog import *

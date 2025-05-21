@@ -9,7 +9,6 @@ from ssm.utils.config import get_config
 
 def main(method=None):
 
-    
     config_path = os.getenv("N2_CONFIG_PATH")
 
     config = get_config(config_path)
@@ -81,8 +80,6 @@ def main(method=None):
     ax[1].set_title("Reference Image")
     plt.show()
 
-    
-    fig, ax = plt.subplots(1, 1, figsize=(15, 5))
 
     fig, ax = plt.subplots(3, 2, figsize=(15, 15))
 
@@ -165,6 +162,19 @@ def main(method=None):
     display_metrics(metrics_best)
 
     fig.tight_layout()
+    plt.show()
+
+    from ssm.utils import auto_select_roi_using_flow
+
+    masks = auto_select_roi_using_flow(raw_image[0][0].cpu().numpy(), device)
+    mask_fig, ax_mask = plt.subplots(1, 3, figsize=(15, 5))
+    ax_mask[0].imshow(raw_image[0][0].cpu().numpy(), cmap='gray')
+    ax_mask[0].set_title('Original Image')
+    ax_mask[1].imshow(masks[0], cmap='gray')
+    ax_mask[1].set_title('Foreground Mask')
+    ax_mask[2].imshow(masks[1], cmap='gray')
+    ax_mask[2].set_title('Background Mask')
+    plt.tight_layout()
     plt.show()
 
     ###
