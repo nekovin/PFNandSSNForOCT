@@ -6,36 +6,11 @@ import torch
 import os
 import random
 from ssm.utils.config import get_config
+from ssm.data import get_paired_loaders
 
-def main(method=None):
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    config_path = os.getenv("N2_CONFIG_PATH")
-
-    config = get_config(config_path)
-
-    n_patients = config['training']['n_patients']
-    
-    override_config = {
-        "eval" : {
-            "ablation": f"patient_count/{n_patients}_patients",
-            "n_patients" : n_patients
-            }
-        }
-
-    all_metrics = {}
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
-    dataset = load_sdoct_dataset(sdoct_path)
-
-    # random sample
-    sample = random.choice(list(dataset.keys()))
-    raw_image = dataset[sample]["raw"][0][0]
-    reference = dataset[sample]["avg"][0][0]
-
-
-    def normalise_sample(raw_image, reference):
+def normalise_sample(raw_image, reference):
         '''
         sample = random.choice(list(dataset.keys()))
         raw_image = dataset[sample]["raw"][0][0]
@@ -69,8 +44,61 @@ def main(method=None):
         reference = reference.to(device)
 
         return raw_image, reference
+
+def main(method=None, soct=True):
+
+    config_path = os.getenv("N2_CONFIG_PATH")
+
+    config = get_config(config_path)
+
+    n_patients = config['training']['n_patients']
     
-    raw_image, reference = normalise_sample(raw_image, reference)
+    override_config = {
+        "eval" : {
+            "ablation": f"patient_count/{n_patients}_patients",
+            "n_patients" : n_patients
+            }
+        }
+
+    all_metrics = {}
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    if soct:
+
+        sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
+        dataset = load_sdoct_dataset(sdoct_path)
+
+        # random sample
+        sample = random.choice(list(dataset.keys()))
+        raw_image = dataset[sample]["raw"][0][0]
+        reference = dataset[sample]["avg"][0][0]
+        raw_image, reference = normalise_sample(raw_image, reference)
+    
+    else:
+        n_images_per_patient = config['training']['n_images_per_patient']
+        batch_size = config['training']['batch_size']
+        start = 1
+        train_loader, val_loader = get_paired_loaders(start, 2, 5, batch_size)
+        print(f"Train loader size: {len(train_loader.dataset)}")
+        
+        # Get actual tensor data, not shape
+        batch_data = next(iter(train_loader))
+        sample_batch = batch_data[0]  # Get input tensor batch
+        print(f"Sample batch shape: {sample_batch.shape}")
+        
+        # Get first sample from batch
+        raw_image = sample_batch[0]  # Shape: (channels, height, width)
+        reference = sample_batch[0]  # Using same as reference
+        
+        # Add batch dimension
+        raw_image = raw_image.unsqueeze(0).to(device)  # Shape: (1, channels, height, width)
+        reference = reference.unsqueeze(0).to(device)
+
+
+    
+    
+    
     
 
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))

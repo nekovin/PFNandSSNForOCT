@@ -74,6 +74,28 @@ def create_random_partition_masks(shape, n_partitions=4, device='cuda'):
     
     return masks
 
+def create_partition_masks_batch(shape, n_partitions, batch_size, device='cuda'):
+    """Pre-compute masks for entire batch"""
+    height, width = shape
+    total_pixels = height * width
+    
+    # Create masks for entire batch at once
+    masks = torch.zeros(batch_size, n_partitions, height, width, device=device)
+    
+    for b in range(batch_size):
+        indices = torch.randperm(total_pixels, device=device)
+        partition_size = total_pixels // n_partitions
+        
+        for p in range(n_partitions):
+            start_idx = p * partition_size
+            end_idx = start_idx + partition_size if p < n_partitions - 1 else total_pixels
+            
+            flat_mask = torch.zeros(total_pixels, device=device)
+            flat_mask[indices[start_idx:end_idx]] = 1
+            masks[b, p] = flat_mask.view(height, width)
+    
+    return masks
+
 def _process_batch_n2s(data_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module=None, alpha=1.0):
     mode = 'train' if model.training else 'val'
     
@@ -380,12 +402,20 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
     for epoch in tqdm_notebook(range(starting_epoch, starting_epoch+epochs)):
         model.train()
         #train_loss = process_batch_n2s(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
-        train_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+        #train_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+        train_loss, _ = process_batch_n2s_patch(
+            model, train_loader, criterion, optimizer, device=device,
+            speckle_module=speckle_module, visualize=visualise, alpha=alpha
+        )
         
         model.eval()
         with torch.no_grad():
             #val_loss = process_batch_n2s(val_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
-            val_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+            #val_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+            val_loss, _ = process_batch_n2s_patch(
+                model, val_loader, criterion, optimizer, device=device,
+                speckle_module=speckle_module, visualize=visualise, alpha=alpha
+            )
 
         print(f"Epoch [{starting_epoch+epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
         
@@ -416,3 +446,892 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
     print(f"Training completed in {elapsed_time / 60:.2f} minutes")
     
     return model
+
+def train_n2s_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
+          best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
+          speckle_module=None, alpha=1, save=False, scheduler=None, sample=None, train_config=None, best_metrics_score=float('-inf'),
+          patch_size=64, stride=32, n_partitions=2):
+
+    last_checkpoint_path = checkpoint_path + f'_patched_last_checkpoint.pth'
+    best_checkpoint_path = checkpoint_path + f'_patched_best_checkpoint.pth'
+    best_metrics_checkpoint_path = checkpoint_path + f'_patched_best_metrics_checkpoint.pth'
+
+    print(f"Saving checkpoints to {best_checkpoint_path}")
+
+    start_time = time.time()
+
+    for epoch in tqdm_notebook(range(starting_epoch, starting_epoch+epochs)):
+        print(f"Epoch {epoch+1}/{epochs}")
+        model.train()
+        #train_loss = process_batch_n2s(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+        #train_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+        train_loss, _ = process_batch_n2s_patch(
+            model, train_loader, criterion, optimizer, device=device,
+            speckle_module=speckle_module, visualize=False, alpha=alpha, scheduler=None, sample=sample,
+            patch_size=patch_size, stride=stride, n_partitions=n_partitions
+        )
+        
+        model.eval()
+        with torch.no_grad():
+            #val_loss = process_batch_n2s(val_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+            #val_loss = process_batch_n2s_with_clean_inference(train_loader, model, criterion, optimizer, epoch, epochs, device, visualise, speckle_module, alpha)
+            val_loss, val_metrics = process_batch_n2s_patch(
+                model, val_loader, criterion, optimizer=None, device=device,
+                speckle_module=speckle_module, visualize=visualise, alpha=alpha, scheduler=scheduler, sample=sample,
+                patch_size=patch_size, stride=stride, n_partitions=n_partitions
+            )
+
+            val_metrics_score = (
+                val_metrics.get('snr', 0) * 0.3 + 
+                val_metrics.get('cnr', 0) * 0.3 + 
+                val_metrics.get('enl', 0) * 0.2 + 
+                val_metrics.get('epi', 0) * 0.2
+            )
+
+        print(f"Epoch [{starting_epoch+epoch+1}/{epochs}], Average Loss: {train_loss:.6f}")
+        
+        if val_loss < best_val_loss and save:
+            best_val_loss = val_loss
+            print(f"Saving best model with val loss: {val_loss:.6f}")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': train_loss,
+                'val_loss': val_loss,
+                'best_val_loss': best_val_loss,
+                'metrics': val_metrics,
+                'metrics_score': val_metrics_score,
+                'train_config': train_config
+            }, best_checkpoint_path)
+
+        if val_metrics_score > best_metrics_score  and save:
+            best_metrics_score = val_metrics_score
+            print(f"Saving best metrics model with score: {val_metrics_score:.4f}")
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': train_loss,
+                'val_loss': val_loss,
+                'best_val_loss': best_val_loss,
+                'metrics': val_metrics,
+                'metrics_score': val_metrics_score,
+                'train_config': train_config
+            }, best_metrics_checkpoint_path)
+        
+        if save:
+            print(f"Saving last model with val loss: {val_loss:.6f}")
+            torch.save({
+                        'epoch': epoch,
+                        'model_state_dict': model.state_dict(),
+                        'optimizer_state_dict': optimizer.state_dict(),
+                        'train_loss': train_loss,
+                        'val_loss': val_loss,
+                        'best_val_loss': best_val_loss,
+                        'metrics': val_metrics,
+                        'metrics_score': val_metrics_score,
+                        'train_config': train_config
+                }, last_checkpoint_path)
+    
+    elapsed_time = time.time() - start_time
+    print(f"Training completed in {elapsed_time / 60:.2f} minutes")
+    
+    return model
+
+
+from contextlib import nullcontext
+from ssm.utils import evaluate_oct_denoising
+import torch.nn.functional as F
+from ssm.utils.data_utils.patch_processing import extract_patches, reconstruct_from_patches
+
+def _process_batch_n2s_patch(
+        model, loader, criterion, optimizer=None,
+        device='cuda', speckle_module=None, visualize=False,
+        alpha=1.0, scheduler=None, sample=None,
+        patch_size=64, stride=32, n_partitions=4
+        ):
+    
+    if optimizer: 
+        model.train()
+    else:
+        model.eval()
+    
+    total_loss = 0.0
+    metrics = None
+    
+    context_manager = torch.no_grad() if not optimizer else nullcontext()
+    
+    with context_manager:
+        for batch_idx, batch in enumerate(tqdm(loader)):
+            raw1, _ = batch
+            raw1 = raw1.to(device)
+
+            # Extract patches
+            raw1_patches, patch_locations1 = extract_patches(raw1, patch_size, stride)
+            
+            # Create partition masks for patch size
+            partition_masks = create_random_partition_masks((patch_size, patch_size), n_partitions=n_partitions, device=device)
+            
+            # Process patches in sub-batches
+            sub_batch_size = 8
+            batch_loss = 0.0
+            all_output1_patches = []
+            accumulated_loss = None
+            
+            for i in range(0, len(raw1_patches), sub_batch_size):
+                raw1_sub_batch = raw1_patches[i:i+sub_batch_size]
+                
+                # N2S processing for each partition
+                total_n2s_loss = 0
+                final_output = torch.zeros_like(raw1_sub_batch)
+                
+                for p in range(len(partition_masks)):
+                    curr_mask = partition_masks[p].unsqueeze(0).unsqueeze(0).expand_as(raw1_sub_batch)
+                    comp_mask = 1 - curr_mask
+                    masked_input = raw1_sub_batch * comp_mask
+                    
+                    curr_outputs = model(masked_input)
+                    final_output += curr_outputs * curr_mask
+                    
+                    pred = curr_outputs * curr_mask
+                    target = raw1_sub_batch * curr_mask
+                    loss = criterion(pred, target)
+                    total_n2s_loss += loss
+                
+                n2s_loss = total_n2s_loss / len(partition_masks)
+                all_output1_patches.append(final_output.detach())
+                
+                # Add speckle module loss if provided
+                if speckle_module is not None:
+                    flow_inputs = speckle_module(raw1_sub_batch)['flow_component'].detach()
+                    flow_inputs = normalize_image_torch(flow_inputs)
+                    flow_outputs = speckle_module(final_output)['flow_component'].detach()
+                    flow_outputs = normalize_image_torch(flow_outputs)
+                    flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                    
+                    sub_loss = n2s_loss + flow_loss * alpha
+                else:
+                    sub_loss = n2s_loss
+                
+                batch_loss += sub_loss.item() * len(raw1_sub_batch)
+                
+                # Accumulate gradients only during training
+                if optimizer:
+                    if accumulated_loss is None:
+                        accumulated_loss = sub_loss
+                    else:
+                        accumulated_loss = accumulated_loss + sub_loss
+            
+            # Perform backprop once per batch, only during training
+            if optimizer is not None and accumulated_loss is not None:
+                optimizer.zero_grad()
+                accumulated_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+            
+            total_loss += batch_loss / len(raw1_patches)
+            
+            # Visualization
+            if visualize and batch_idx == 0:
+                output1_patches = torch.cat(all_output1_patches, dim=0)
+                reconstructed_outputs1 = reconstruct_from_patches(
+                    output1_patches, patch_locations1, raw1.shape, patch_size
+                )
+
+                sample_output = None
+                if sample is not None:
+                    model_was_training = model.training
+                    model.eval()
+                    with torch.no_grad():
+                        sample_output = model(sample)
+                    if model_was_training:
+                        model.train()
+                
+                # Filter out None values for plotting
+                if speckle_module is not None:
+                    titles = ['Input Image', 'Flow Input', 'Flow Output', 'N2S Output']
+                    flow_inputs_full = speckle_module(raw1)['flow_component'].detach()
+                    flow_outputs_full = speckle_module(reconstructed_outputs1)['flow_component'].detach()
+                    
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        flow_inputs_full[0][0].cpu().numpy(),
+                        flow_outputs_full[0][0].cpu().numpy(),
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {
+                        'Flow Loss': flow_loss.item(),
+                        'Total Loss': batch_loss / len(raw1_patches)
+                    }
+                else:
+                    titles = ['Input Image', 'N2S Output']
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {'Total Loss': batch_loss / len(raw1_patches)}
+                    
+                plot_images(images, titles, losses)
+
+                from ssm.utils import evaluate_oct_denoising
+                metrics = evaluate_oct_denoising(raw1[0][0].cpu().numpy(), reconstructed_outputs1[0][0].cpu().numpy())
+
+    return total_loss / len(loader), metrics
+
+def _process_batch_n2s_patch(
+        model, loader, criterion, optimizer=None,
+        device='cuda', speckle_module=None, visualize=False,
+        alpha=1.0, scheduler=None, sample=None,
+        patch_size=64, stride=32, n_partitions=2
+        ):
+    
+    if optimizer: 
+        model.train()
+    else:
+        model.eval()
+    
+    total_loss = 0.0
+    metrics = None
+    
+    context_manager = torch.no_grad() if not optimizer else nullcontext()
+    
+    with context_manager:
+        for batch_idx, batch in enumerate(tqdm(loader)):
+            print(f"Processing batch {batch_idx + 1}/{len(loader)}")
+            raw1, _ = batch
+            raw1 = raw1.to(device)
+
+            # Extract patches
+            raw1_patches, patch_locations1 = extract_patches(raw1, patch_size, stride)
+            
+            # Create partition masks once
+            partition_masks = create_random_partition_masks(
+                (patch_size, patch_size), n_partitions=n_partitions, device=device
+            )
+            
+            # Pre-compute speckle flow inputs if needed
+            flow_inputs_cache = None
+            if speckle_module is not None:
+                with torch.no_grad():
+                    flow_inputs_cache = speckle_module(raw1_patches)['flow_component'].detach()
+                    flow_inputs_cache = normalize_image_torch(flow_inputs_cache)
+            
+            # Process all patches at once with vectorized operations
+            batch_loss = 0.0
+            accumulated_loss = None
+            
+            # Vectorized N2S processing
+            n_patches = raw1_patches.shape[0]
+            
+            # Expand masks to match patch batch size
+            expanded_masks = torch.stack([
+                mask.unsqueeze(0).expand(n_patches, -1, -1) 
+                for mask in partition_masks
+            ])  # Shape: [n_partitions, n_patches, H, W]
+            
+            # Create complementary masks
+            comp_masks = 1 - expanded_masks
+            
+            # Process all partitions simultaneously
+            all_masked_inputs = []
+            all_targets = []
+            
+            for p in range(n_partitions):
+                curr_mask = expanded_masks[p].unsqueeze(1)  # Add channel dim
+                comp_mask = comp_masks[p].unsqueeze(1)
+                
+                masked_input = raw1_patches * comp_mask
+                target = raw1_patches * curr_mask
+                
+                all_masked_inputs.append(masked_input)
+                all_targets.append(target)
+            
+            # Batch process all masked inputs
+            all_masked_batch = torch.cat(all_masked_inputs, dim=0)
+            all_outputs_batch = model(all_masked_batch)
+            
+            # Split outputs back by partition
+            outputs_by_partition = torch.split(all_outputs_batch, n_patches, dim=0)
+            
+            # Compute N2S loss and reconstruct final output
+            final_output = torch.zeros_like(raw1_patches)
+            total_n2s_loss = 0
+            
+            for p, (output, target, mask) in enumerate(zip(
+                outputs_by_partition, all_targets, expanded_masks
+            )):
+                mask = mask.unsqueeze(1)
+                pred = output * mask
+                final_output += pred
+                
+                loss = criterion(pred, target)
+                total_n2s_loss += loss
+            
+            n2s_loss = total_n2s_loss / n_partitions
+            
+            # Speckle module loss (if enabled)
+            if speckle_module is not None:
+                with torch.no_grad():
+                    flow_outputs = speckle_module(final_output)['flow_component'].detach()
+                    flow_outputs = normalize_image_torch(flow_outputs)
+                    flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs_cache))
+                
+                total_batch_loss = n2s_loss + flow_loss * alpha
+            else:
+                total_batch_loss = n2s_loss
+            
+            batch_loss = total_batch_loss.item()
+            
+            # Backpropagation (training only)
+            if optimizer is not None:
+                optimizer.zero_grad()
+                total_batch_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+            
+            total_loss += batch_loss
+            
+            # Visualization (first batch only)
+            if visualize:
+                reconstructed_outputs1 = reconstruct_from_patches(
+                    final_output, patch_locations1, raw1.shape, patch_size
+                )
+
+                reconstructed_outputs1 = reconstructed_outputs1.detach().cpu()
+
+                sample_output = None
+                if sample is not None:
+                    model_was_training = model.training
+                    model.eval()
+                    with torch.no_grad():
+                        sample_output = model(sample)
+                    if model_was_training:
+                        model.train()
+                
+                # Visualization setup
+                if speckle_module is not None:
+                    titles = ['Input Image', 'Flow Input', 'Flow Output', 'N2S Output']
+                    flow_inputs_full = speckle_module(raw1)['flow_component'].detach()
+                    flow_outputs_full = speckle_module(reconstructed_outputs1)['flow_component'].detach()
+
+                    # detach
+                    
+                    
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        flow_inputs_full[0][0].cpu().numpy(),
+                        flow_outputs_full[0][0].cpu().numpy(),
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {
+                        'Flow Loss': flow_loss.item(),
+                        'Total Loss': batch_loss
+                    }
+                else:
+                    titles = ['Input Image', 'N2S Output']
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {'Total Loss': batch_loss}
+                    
+                plot_images(images, titles, losses)
+
+                from ssm.utils import evaluate_oct_denoising
+                metrics = evaluate_oct_denoising(
+                    raw1[0][0].cpu().numpy(), 
+                    reconstructed_outputs1[0][0].cpu().numpy()
+                )
+
+    return total_loss / len(loader), metrics
+
+def _process_batch_n2s_patch(
+        model, loader, criterion, optimizer=None,
+        device='cuda', speckle_module=None, visualize=False,
+        alpha=1.0, scheduler=None, sample=None,
+        patch_size=64, stride=32, n_partitions=2
+        ):
+    
+    if optimizer: 
+        model.train()
+    else:
+        model.eval()
+    
+    total_loss = 0.0
+    metrics = None
+    
+    # Pre-compute checkerboard masks once
+    y_coords, x_coords = torch.meshgrid(
+        torch.arange(patch_size, device=device),
+        torch.arange(patch_size, device=device),
+        indexing='ij'
+    )
+    mask1 = ((y_coords + x_coords) % 2).float().unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+    mask2 = 1 - mask1
+    
+    context_manager = torch.no_grad() if not optimizer else nullcontext()
+    
+    with context_manager:
+        for batch_idx, batch in enumerate(tqdm(loader)):
+            print(f"Processing batch {batch_idx + 1}/{len(loader)}")
+            raw1, _ = batch
+            raw1 = raw1.to(device)
+
+            # Extract patches
+            raw1_patches, patch_locations = extract_patches(raw1, patch_size, stride)
+            n_patches = raw1_patches.shape[0]
+            
+            # Pre-compute speckle flow inputs if needed
+            flow_inputs_cache = None
+            if speckle_module is not None:
+                with torch.no_grad():
+                    flow_inputs_cache = speckle_module(raw1_patches)['flow_component'].detach()
+                    flow_inputs_cache = normalize_image_torch(flow_inputs_cache)
+            
+            # Expand masks to batch size
+            masks = torch.cat([
+                mask1.expand(n_patches, -1, -1, -1),
+                mask2.expand(n_patches, -1, -1, -1)
+            ])  # [2*n_patches, 1, H, W]
+            
+            # Create masked inputs and targets
+            patches_doubled = torch.cat([raw1_patches, raw1_patches])  # [2*n_patches, 1, H, W]
+            masked_inputs = patches_doubled * (1 - masks)
+            targets = patches_doubled * masks
+            
+            # Single forward pass for all masked inputs
+            outputs = model(masked_inputs)
+            
+            # Apply masks to outputs and compute loss
+            predicted_masked = outputs * masks
+            n2s_loss = criterion(predicted_masked, targets)
+            
+            # Reconstruct final output by combining both partitions
+            pred1, pred2 = torch.split(predicted_masked, n_patches, dim=0)
+            final_output = pred1 + pred2
+            
+            total_batch_loss = n2s_loss
+            
+            # Speckle module loss (if enabled)
+            if speckle_module is not None:
+                with torch.no_grad():
+                    flow_outputs = speckle_module(final_output)['flow_component'].detach()
+                    flow_outputs = normalize_image_torch(flow_outputs)
+                    flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs_cache))
+                
+                total_batch_loss = n2s_loss + flow_loss * alpha
+            
+            # Backpropagation (training only)
+            if optimizer is not None:
+                optimizer.zero_grad()
+                total_batch_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+            
+            total_loss += total_batch_loss.item()
+            
+            # Visualization (first batch only)
+            if visualize:
+                reconstructed_outputs1 = reconstruct_from_patches(
+                    final_output, patch_locations, raw1.shape, patch_size
+                )
+                reconstructed_outputs1 = reconstructed_outputs1.detach().cpu()
+
+                sample_output = None
+                if sample is not None:
+                    model_was_training = model.training
+                    model.eval()
+                    with torch.no_grad():
+                        sample_output = model(sample)
+                    if model_was_training:
+                        model.train()
+                
+                # Visualization setup
+                if speckle_module is not None:
+                    titles = ['Input Image', 'Flow Input', 'Flow Output', 'N2S Output']
+                    flow_inputs_full = speckle_module(raw1)['flow_component'].detach()
+                    #flow_outputs_full = speckle_module(reconstructed_outputs1)['flow_component'].detach()
+                    flow_outputs_full = speckle_module(reconstructed_outputs1.to(device))['flow_component'].detach()
+                    
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        flow_inputs_full[0][0].cpu().numpy(),
+                        flow_outputs_full[0][0].cpu().numpy(),
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {
+                        'Flow Loss': flow_loss.item(),
+                        'Total Loss': total_batch_loss.item()
+                    }
+                else:
+                    titles = ['Input Image', 'N2S Output']
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {'Total Loss': total_batch_loss.item()}
+                    
+                plot_images(images, titles, losses)
+
+                from ssm.utils import evaluate_oct_denoising
+                metrics = evaluate_oct_denoising(
+                    raw1[0][0].cpu().numpy(), 
+                    reconstructed_outputs1[0][0].cpu().numpy()
+                )
+
+    return total_loss / len(loader), metrics
+
+def _process_batch_n2s_patch(
+        model, loader, criterion, optimizer=None,
+        device='cuda', speckle_module=None, visualize=False,
+        alpha=1.0, scheduler=None, sample=None,
+        patch_size=64, stride=32, n_partitions=2
+        ):
+    
+    if optimizer: 
+        model.train()
+    else:
+        model.eval()
+    
+    total_loss = 0.0
+    metrics = None
+    
+    y_coords, x_coords = torch.meshgrid(
+        torch.arange(patch_size, device=device),
+        torch.arange(patch_size, device=device),
+        indexing='ij'
+    )
+    mask1 = ((y_coords + x_coords) % 2).float().unsqueeze(0).unsqueeze(0)
+    mask2 = 1 - mask1
+    
+    context_manager = torch.no_grad() if not optimizer else nullcontext()
+    
+    with context_manager:
+        for batch_idx, batch in enumerate(tqdm(loader)):
+            print(f"Processing batch {batch_idx + 1}/{len(loader)}")
+            raw1, _ = batch
+            raw1 = raw1.to(device)
+
+            # Extract patches
+            raw1_patches, patch_locations = extract_patches(raw1, patch_size, stride)
+            n_patches = raw1_patches.shape[0]
+            
+            # Expand masks to batch size
+            masks = torch.cat([
+                mask1.expand(n_patches, -1, -1, -1),
+                mask2.expand(n_patches, -1, -1, -1)
+            ])  # [2*n_patches, 1, H, W]
+            
+            # Create masked inputs and targets
+            patches_doubled = torch.cat([raw1_patches, raw1_patches])  # [2*n_patches, 1, H, W]
+            masked_inputs = patches_doubled * (1 - masks)
+            targets = patches_doubled * masks
+            
+            # Single forward pass for all masked inputs
+            outputs = model(masked_inputs)
+            
+            # Apply masks to outputs and compute loss
+            predicted_masked = outputs * masks
+            n2s_loss = criterion(predicted_masked, targets)
+            
+            # Reconstruct final output by combining both partitions
+            pred1, pred2 = torch.split(predicted_masked, n_patches, dim=0)
+            final_output = pred1 + pred2
+            
+            total_batch_loss = n2s_loss
+            
+            # Speckle module loss (if enabled) - EXACTLY like N2V
+            if speckle_module is not None:
+                flow_inputs = speckle_module(raw1_patches)['flow_component'].detach()
+                flow_inputs = normalize_image_torch(flow_inputs)
+                
+                flow_outputs = speckle_module(final_output)['flow_component'].detach()
+                flow_outputs = normalize_image_torch(flow_outputs)
+                
+                flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                total_batch_loss = n2s_loss + flow_loss * alpha
+            
+            # Backpropagation (training only)
+            if optimizer is not None:
+                optimizer.zero_grad()
+                total_batch_loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+            
+            total_loss += total_batch_loss.item()
+            
+            # Visualization (first batch only)
+            if visualize:
+                reconstructed_outputs1 = reconstruct_from_patches(
+                    final_output, patch_locations, raw1.shape, patch_size
+                )
+                reconstructed_outputs1 = reconstructed_outputs1.detach().cpu()
+
+                sample_output = None
+                if sample is not None:
+                    model_was_training = model.training
+                    model.eval()
+                    with torch.no_grad():
+                        sample_output = model(sample)
+                    if model_was_training:
+                        model.train()
+                
+                # Visualization setup
+                if speckle_module is not None:
+                    titles = ['Input Image', 'Flow Input', 'Flow Output', 'N2S Output']
+                    flow_inputs_full = speckle_module(raw1)['flow_component'].detach()
+                    flow_outputs_full = speckle_module(reconstructed_outputs1.to(device))['flow_component'].detach()
+                    
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        flow_inputs_full[0][0].cpu().numpy(),
+                        flow_outputs_full[0][0].cpu().numpy(),
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {
+                        'Flow Loss': flow_loss.item(),
+                        'Total Loss': total_batch_loss.item()
+                    }
+                else:
+                    titles = ['Input Image', 'N2S Output']
+                    images = [
+                        raw1[0][0].cpu().numpy(), 
+                        reconstructed_outputs1[0][0].cpu().numpy()
+                    ]
+                    
+                    if sample is not None and sample_output is not None:
+                        titles.extend(['Sample Input', 'Sample Output'])
+                        images.extend([
+                            sample.cpu().numpy()[0][0],
+                            sample_output[0][0].cpu().numpy()
+                        ])
+                    
+                    losses = {'Total Loss': total_batch_loss.item()}
+                    
+                plot_images(images, titles, losses)
+
+                from ssm.utils import evaluate_oct_denoising
+                metrics = evaluate_oct_denoising(
+                    raw1[0][0].cpu().numpy(), 
+                    reconstructed_outputs1[0][0].cpu().numpy()
+                )
+
+    return total_loss / len(loader), metrics
+
+def process_batch_n2s_patch(
+       model, loader, criterion, optimizer=None,
+       device='cuda', speckle_module=None, visualize=False,
+       alpha=1.0, scheduler=None, sample=None,
+       patch_size=64, stride=32, n_partitions=2
+       ):
+   
+   if optimizer: 
+       model.train()
+   else:
+       model.eval()
+   
+   total_loss = 0.0
+   metrics = None
+   
+   # Pre-compute checkerboard masks once
+   y_coords, x_coords = torch.meshgrid(
+       torch.arange(patch_size, device=device),
+       torch.arange(patch_size, device=device),
+       indexing='ij'
+   )
+   mask1 = ((y_coords + x_coords) % 2).float().unsqueeze(0).unsqueeze(0)  # [1, 1, H, W]
+   mask2 = 1 - mask1
+   
+   context_manager = torch.no_grad() if not optimizer else nullcontext()
+   
+   with context_manager:
+       for batch_idx, batch in enumerate(tqdm(loader)):
+           print(f"Processing batch {batch_idx + 1}/{len(loader)}")
+           raw1, _ = batch
+           raw1 = raw1.to(device)
+
+           # Extract patches
+           raw1_patches, patch_locations = extract_patches(raw1, patch_size, stride)
+           n_patches = raw1_patches.shape[0]
+           
+           # Process patches in sub-batches
+           sub_batch_size = 32
+           batch_loss = 0.0
+           all_output_patches = []
+           
+           for i in range(0, n_patches, sub_batch_size):
+               current_batch_size = min(sub_batch_size, n_patches - i)
+               patch_sub_batch = raw1_patches[i:i+current_batch_size]
+               
+               # Get masks for current sub-batch
+               mask1_batch = mask1.expand(current_batch_size, -1, -1, -1)
+               mask2_batch = mask2.expand(current_batch_size, -1, -1, -1)
+               
+               # Process partition 1
+               masked_input1 = patch_sub_batch * (1 - mask1_batch)
+               output1 = model(masked_input1)
+               pred1 = output1 * mask1_batch
+               
+               # Process partition 2
+               masked_input2 = patch_sub_batch * (1 - mask2_batch)
+               output2 = model(masked_input2)
+               pred2 = output2 * mask2_batch
+               
+               # Combine predictions
+               final_output = pred1 + pred2
+               all_output_patches.append(final_output.detach())
+               
+               # Compute N2S loss
+               target1 = patch_sub_batch * mask1_batch
+               target2 = patch_sub_batch * mask2_batch
+               n2s_loss = criterion(pred1, target1) + criterion(pred2, target2)
+               
+               sub_loss = n2s_loss
+               
+               # Speckle module loss (if enabled)
+               if speckle_module is not None:
+                   with torch.no_grad():
+                       flow_inputs = speckle_module(patch_sub_batch)['flow_component']
+                       flow_inputs = normalize_image_torch(flow_inputs)
+                       
+                       flow_outputs = speckle_module(final_output)['flow_component']
+                       flow_outputs = normalize_image_torch(flow_outputs)
+                   
+                   flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                   sub_loss = n2s_loss + flow_loss * alpha
+               
+               batch_loss += sub_loss.item() * current_batch_size
+               
+               # Backpropagation (training only)
+               if optimizer is not None:
+                   optimizer.zero_grad()
+                   sub_loss.backward()
+                   torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                   optimizer.step()
+           
+           total_loss += batch_loss / n_patches
+           
+           # Visualization (first batch only)
+           if visualize and batch_idx == 0:
+               # Concatenate all output patches
+               output_patches = torch.cat(all_output_patches, dim=0)
+               reconstructed_outputs1 = reconstruct_from_patches(
+                   output_patches, patch_locations, raw1.shape, patch_size
+               )
+               
+               sample_output = None
+               if sample is not None:
+                   model_was_training = model.training
+                   model.eval()
+                   with torch.no_grad():
+                       sample_output = model(sample)
+                   if model_was_training:
+                       model.train()
+               
+               # Visualization setup
+               if speckle_module is not None:
+                   with torch.no_grad():
+                       flow_inputs_full = speckle_module(raw1)['flow_component']
+                       flow_outputs_full = speckle_module(reconstructed_outputs1)['flow_component']
+                   
+                   titles = ['Input Image', 'Flow Input', 'Flow Output', 'N2S Output']
+                   images = [
+                       raw1[0][0].cpu().numpy(), 
+                       flow_inputs_full[0][0].cpu().numpy(),
+                       flow_outputs_full[0][0].cpu().numpy(),
+                       reconstructed_outputs1[0][0].cpu().numpy()
+                   ]
+                   
+                   if sample is not None and sample_output is not None:
+                       titles.extend(['Sample Input', 'Sample Output'])
+                       images.extend([
+                           sample.cpu().numpy()[0][0],
+                           sample_output[0][0].cpu().numpy()
+                       ])
+                   
+                   losses = {
+                       'Flow Loss': flow_loss.item() if speckle_module else 0,
+                       'Total Loss': batch_loss / n_patches
+                   }
+               else:
+                   titles = ['Input Image', 'N2S Output']
+                   images = [
+                       raw1[0][0].cpu().numpy(), 
+                       reconstructed_outputs1[0][0].cpu().numpy()
+                   ]
+                   
+                   if sample is not None and sample_output is not None:
+                       titles.extend(['Sample Input', 'Sample Output'])
+                       images.extend([
+                           sample.cpu().numpy()[0][0],
+                           sample_output[0][0].cpu().numpy()
+                       ])
+                   
+                   losses = {'Total Loss': batch_loss / n_patches}
+                   
+               plot_images(images, titles, losses)
+
+               from ssm.utils import evaluate_oct_denoising
+               metrics = evaluate_oct_denoising(
+                   raw1[0][0].cpu().numpy(), 
+                   reconstructed_outputs1[0][0].cpu().numpy()
+               )
+
+   return total_loss / len(loader), metrics

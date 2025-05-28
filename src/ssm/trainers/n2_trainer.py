@@ -11,7 +11,7 @@ from ssm.models.unet.small_unet_att import SmallUNetAtt
 
 from ssm.schemas.baselines.n2n import train_n2n
 from ssm.schemas.baselines.n2v import train_n2v
-from ssm.schemas.baselines.n2s import train_n2s
+from ssm.schemas.baselines.n2s import train_n2s, train_n2s_patch
 
 from ssm.schemas.baselines.n2n_patch import train_n2n_patch
 from ssm.schemas.baselines.n2v_patch import train_n2v_patch
@@ -106,9 +106,13 @@ def train(config, method, ssm):
     raw_image = dataset[sample]["raw"][0][0]
     raw_image = raw_image.cpu().numpy()
     print(f"Raw image shape: {raw_image.shape}")
+    if raw_image.max() > 1.0:
+        raw_image = raw_image / 255.0
+    print(f"Raw image max: {raw_image.max()}, min: {raw_image.min()}")
     resized = cv2.resize(raw_image, (256, 256), interpolation=cv2.INTER_LINEAR)
     print(f"Resized image shape: {resized.shape}")
     resized = normalize_image_np(resized)
+    print(f"Raw image max: {raw_image.max()}, min: {raw_image.min()}")
     #raw_image = resized.to(device)
     resized = resized[:, :, np.newaxis]  # Add channel dimension
     raw_image = torch.from_numpy(resized.transpose(2, 0, 1)).float()  # Transpose channels
@@ -287,24 +291,51 @@ def train(config, method, ssm):
                     best_metrics_score=best_metrics_score,
                     scheduler=scheduler)
         elif method == "n2s":
-            model = train_n2s(
-                model,
-                train_loader,
-                val_loader,
-                optimizer=optimizer,
-                criterion=train_config['criterion'],
-                starting_epoch=starting_epoch,
-                epochs=train_config['epochs'], 
-                batch_size=train_config['batch_size'], 
-                lr=train_config['learning_rate'],
-                best_val_loss=best_val_loss,
-                checkpoint_path=checkpoint_path,
-                device=device,
-                visualise=visualise,
-                speckle_module=speckle_module,
-                alpha=alpha,
-                save=save)
-
+            if patch:
+                model = train_n2s_patch(
+                    model,
+                    train_loader,
+                    val_loader,
+                    optimizer=optimizer,
+                    criterion=train_config['criterion'],
+                    starting_epoch=starting_epoch,
+                    epochs=train_config['epochs'], 
+                    batch_size=train_config['batch_size'], 
+                    lr=train_config['learning_rate'],
+                    best_val_loss=best_val_loss,
+                    checkpoint_path=checkpoint_path,
+                    device=device,
+                    visualise=visualise,
+                    speckle_module=speckle_module,
+                    alpha=alpha,
+                    save=save,
+                    scheduler=scheduler,
+                    sample=raw_image,
+                    train_config=train_config,
+                    best_metrics_score=best_metrics_score,
+                    patch_size=train_config['patch_size'], 
+                    stride=train_config['stride'], 
+                    n_partitions=train_config['n_partitions']
+                    )
+                
+            else:
+                model = train_n2s(
+                    model,
+                    train_loader,
+                    val_loader,
+                    optimizer=optimizer,
+                    criterion=train_config['criterion'],
+                    starting_epoch=starting_epoch,
+                    epochs=train_config['epochs'], 
+                    batch_size=train_config['batch_size'], 
+                    lr=train_config['learning_rate'],
+                    best_val_loss=best_val_loss,
+                    checkpoint_path=checkpoint_path,
+                    device=device,
+                    visualise=visualise,
+                    speckle_module=speckle_module,
+                    alpha=alpha,
+                    save=save)
             
     return model
 
