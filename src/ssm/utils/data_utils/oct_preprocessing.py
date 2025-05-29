@@ -2,13 +2,64 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-def compute_decorrelation(oct1, oct2):
+def _compute_decorrelation(oct1, oct2):
 
     numerator = (oct1 - oct2)**2
     denominator = oct1**2 + oct2**2
     
     epsilon = 1e-6 
     decorrelation = numerator / (denominator + epsilon)
+    
+    return decorrelation
+
+def compute_decorrelation(oct1, oct2):
+    """
+    Simple pairwise decorrelation for two frames only.
+    Equivalent to SSADA with N=2.
+    
+    Args:
+        oct1, oct2: 2D numpy arrays (amplitude frames)
+    
+    Returns:
+        decorrelation: 2D array of decorrelation values
+    """
+    # Compute correlation coefficient
+    numerator = oct1 * oct2
+    denominator = 0.5 * (oct1**2 + oct2**2)
+    
+    # Avoid division by zero
+    epsilon = 1e-8
+    correlation = numerator / (denominator + epsilon)
+    
+    # Return decorrelation (1 - correlation)
+    decorrelation = 1.0 - correlation
+    
+    return decorrelation
+
+def compute_decorrelation(oct1, oct2):
+    """
+    Compute SSADA decorrelation from two OCT amplitude frames.
+    
+    Args:
+        oct1, oct2: 2D numpy arrays (amplitude frames)
+    
+    Returns:
+        decorrelation: 2D array of decorrelation values
+    """
+    # Since we only have 2 frames, we can compute directly
+    A_n = oct1
+    A_n1 = oct2
+    
+    # Compute correlation coefficient
+    numerator = A_n * A_n1
+    denominator = 0.5 * (A_n**2 + A_n1**2)
+    
+    # Avoid division by zero
+    epsilon = 1e-8
+    correlation = numerator / (denominator + epsilon)
+    
+    # Return decorrelation (1 - correlation)
+    decorrelation = 1.0 - correlation
     
     return decorrelation
 

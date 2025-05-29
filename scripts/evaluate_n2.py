@@ -70,7 +70,8 @@ def main(method=None, soct=True):
         dataset = load_sdoct_dataset(sdoct_path)
 
         # random sample
-        sample = random.choice(list(dataset.keys()))
+        #sample = random.choice(list(dataset.keys()))
+        sample = '1'
         raw_image = dataset[sample]["raw"][0][0]
         reference = dataset[sample]["avg"][0][0]
         raw_image, reference = normalise_sample(raw_image, reference)
@@ -102,10 +103,13 @@ def main(method=None, soct=True):
     
 
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    for a in ax:
+        a.axis('off')
     ax[0].imshow(raw_image.cpu().numpy()[0][0], cmap="gray")
     ax[0].set_title("Raw Image")
     ax[1].imshow(reference.cpu().numpy()[0][0], cmap="gray")
     ax[1].set_title("Reference Image")
+    plt.tight_layout()
     plt.show()
 
 
@@ -205,7 +209,65 @@ def main(method=None, soct=True):
     plt.tight_layout()
     plt.show()
 
+    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    for a in ax:
+        a.axis('off')
+    ax[0].imshow(n2v_denoised, cmap='gray')
+    ax[0].set_title(f"{method} Denoised")
+    ax[1].imshow(n2v_ssm_denoised, cmap='gray')
+    ax[1].set_title(f"{method} SSM Denoised")
+    plt.tight_layout()
+    plt.show()
+
     ###
+
+    print("Comparing image patches...")
+    print(f"Raw image shape: {raw_image.shape}")
+    print(f"Reference image shape: {reference.shape}")
+    print(f"N2V denoised shape: {n2v_denoised.shape if n2v_denoised is not None else 'N/A'}")
+
+    def compare_image_patches(img1, img2, figsize=(15, 8)):
+        """
+        Split two images into 3x3 patches and visualize comparison
+        
+        Args:
+            img1, img2: Input images (H, W) or (H, W, C)
+            figsize: Figure size for matplotlib
+        """
+        # Ensure images are same size
+        assert img1.shape == img2.shape, "Images must have same dimensions"
+        
+        h, w = img1.shape[:2]
+        patch_h, patch_w = h // 3, w // 3
+        
+        fig, axes = plt.subplots(3, 6, figsize=figsize)
+        fig.suptitle('Image Patch Comparison (Left: Image 1, Right: Image 2)')
+        
+        for i in range(3):
+            for j in range(3):
+                # Extract patches
+                y_start, y_end = i * patch_h, (i + 1) * patch_h
+                x_start, x_end = j * patch_w, (j + 1) * patch_w
+                
+                patch1 = img1[y_start:y_end, x_start:x_end]
+                patch2 = img2[y_start:y_end, x_start:x_end]
+                
+                # Plot patch from image 1
+                axes[i][j*2].imshow(patch1, cmap='gray')
+                axes[i][j*2].set_title(f'Img1 P{i}{j}')
+                axes[i][j*2].axis('off')
+                
+                # Plot patch from image 2
+                axes[i][j*2+1].imshow(patch2, cmap='gray')
+                axes[i][j*2+1].set_title(f'Img2 P{i}{j}')
+                axes[i][j*2+1].axis('off')
+        
+        plt.tight_layout()
+        plt.show()
+
+    # Usage example:
+    compare_image_patches(raw_image[0][0].cpu().numpy(), n2v_denoised)
+    compare_image_patches(raw_image[0][0].cpu().numpy(), n2v_ssm_denoised)
         
 
 if __name__ == "__main__":
