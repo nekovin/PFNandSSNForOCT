@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
 from ssm.evaluation import evaluate_baseline, evaluate_ssm_constraint
-from ssm.utils import load_sdoct_dataset, display_metrics, normalize_image_np, normalize_image_torch
+from fpss.utils import load_sdoct_dataset, display_metrics, normalize_image_np, normalize_image_torch
 import os
 import random
-from ssm.utils.config import get_config
+from fpss.utils.config import get_config
 import numpy as np
 
 def standard_preprocessing_single_img(img):

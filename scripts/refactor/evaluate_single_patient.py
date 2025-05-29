@@ -1,19 +1,14 @@
-
 import matplotlib.pyplot as plt
 from ssm.evaluation import evaluate_baseline, evaluate_ssm_constraint, evaluate_progressssive_fusion_unet
 from fpss.utils import load_sdoct_dataset, display_metrics, display_grouped_metrics
 from tqdm import tqdm
 import torch
-import os
 
 def main():
     
     override_config = {
-        "eval" : {
-            "ablation": "patient_count/10_patients",
-            "n_patients" : 10
-            }
-        }
+        "1" : ""
+    }
 
     all_metrics = {}
 
@@ -34,11 +29,9 @@ def main():
     ax[1].set_title("Reference Image")
     plt.show()
 
-    config_path = os.getenv("N2_CONFIG_PATH")
-
     
-    n2n_metrics, n2n_denoised = evaluate_baseline(raw_image, reference, "n2n", config_path, override_config=override_config)
-    n2n_ssm_metrics, n2n_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2n", config_path, override_config=override_config)
+    n2n_metrics, n2n_denoised = evaluate_baseline(raw_image, reference, "n2n")
+    n2n_ssm_metrics, n2n_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2n")
     metrics = {}
     metrics['n2n'] = n2n_metrics
     metrics['n2n_ssm'] = n2n_ssm_metrics
@@ -52,8 +45,8 @@ def main():
     ax[1].set_title("N2N SSM Denoised")
     plt.show()
 
-    n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, "n2v", config_path, override_config=override_config)
-    n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2v", config_path, override_config=override_config)
+    n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, "n2v")
+    n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2v")
     metrics = {}
     metrics['n2v'] = n2v_metrics
     metrics['n2v_ssm'] = n2v_ssm_metrics
@@ -67,8 +60,10 @@ def main():
     ax[1].set_title("N2V SSM Denoised")
     plt.show()
 
-    n2s_metrics, n2s_denoised = evaluate_baseline(raw_image, reference, "n2s", config_path, override_config=override_config)
-    n2s_ssm_metrics, n2s_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2s", config_path, override_config=override_config)
+    last = False
+    n2s_metrics, n2s_denoised = evaluate_baseline(raw_image, reference, "n2s", last=last)
+    last = True
+    n2s_ssm_metrics, n2s_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2s", last=last)
     metrics = {}
     metrics['n2s'] = n2s_metrics
     metrics['n2s_ssm'] = n2s_ssm_metrics

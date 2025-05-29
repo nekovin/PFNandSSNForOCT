@@ -1,9 +1,9 @@
 import os
-from fpss.trainers.n2_trainer import train_all_n2
+from fpss.trainers.n2_trainer import train_n2
 
-def main():
+def main(schema):
     
-    patient_count = 40
+    patient_count = 10
 
     override_dict = {
         "training" : {
@@ -13,8 +13,9 @@ def main():
         }
     
     N2_PATH = os.environ.get("N2_CONFIG_PATH")
-    train_all_n2(config_path=N2_PATH, ssm=False, override_config=override_dict)
-    train_all_n2(config_path=N2_PATH, ssm=True, override_config=override_dict)
+
+    print(f"Training {schema} model")
+    train_n2(config_path=N2_PATH, schema=schema, ssm=False, override_config=override_dict)
 
 if __name__ == "__main__":
     main()

@@ -1,5 +1,5 @@
 import os
-from ssm.trainers.n2_trainer import train_all_n2
+from fpss.trainers.n2_trainer import train_all_n2
 
 def main():
     
