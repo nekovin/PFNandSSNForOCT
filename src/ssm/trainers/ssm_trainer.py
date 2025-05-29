@@ -16,12 +16,15 @@ from ssm.losses.ssm_loss import custom_loss
 import numpy as np
 from torch.utils.data import random_split
 
-from ssm.utils import paired_preprocessing, visualize_progress, visualize_attention_maps, subset_blind_spot_masking
+from ssm.utils import paired_preprocessing, visualize_attention_maps, subset_blind_spot_masking
 from ssm.utils.config import get_config
+
 
 from ssm.utils import paired_octa_preprocessing, paired_octa_preprocessing_binary
 
 from ssm.models.unet.large_unet_old import LargeUNetAttention
+
+
 
 def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):
     running_loss = 0.0
@@ -119,12 +122,17 @@ def process_batch(dataloader, model, history, epoch, num_epochs, optimizer, loss
 
     return avg_loss
 
-def process_batch2(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):
+
+from ssm.utils.data_utils.patch_processing import extract_patches, reconstruct_from_patches
+from ssm.utils.eval_utils.visualise import visualize_progress_patch, visualize_progress
+
+def process_batch_patch(dataloader, model, history, epoch, num_epochs, optimizer, loss_fn, loss_parameters, debug, n2v_weight, fast, visualise, mode='train'):
     running_loss = 0.0
     running_flow_loss = 0.0
     running_noise_loss = 0.0
     
     is_training = mode == 'train'
+    patch_size = 128  # Set your desired patch size
     
     progress_bar = tqdm(dataloader, desc=f"{mode.capitalize()} Epoch {epoch+1}/{num_epochs}")
     print(f"{mode.capitalize()}...")
@@ -137,15 +145,49 @@ def process_batch2(dataloader, model, history, epoch, num_epochs, optimizer, los
         
         if is_training and optimizer:
             optimizer.zero_grad()
-            
+        
         with torch.set_grad_enabled(is_training):
-            print(batch_inputs.shape)
+            # Extract patches from both inputs and targets
+            input_patches, input_locations = extract_patches(batch_inputs, patch_size=patch_size)
+            target_patches, _ = extract_patches(batch_targets, patch_size=patch_size)
             
-            outputs = model(batch_inputs)
-
-            total_loss = loss_fn(outputs, batch_targets)
-
+            # Initialize containers for output patches
+            flow_patches = []
+            noise_patches = []
+            
+            # Process patches in smaller batches to avoid memory issues
+            patch_batch_size = 16  # Adjust based on your GPU memory
+            for i in range(0, len(input_patches), patch_batch_size):
+                # Get current batch of patches
+                batch_input_patch = input_patches[i:i+patch_batch_size]
+                
+                # Forward pass
+                outputs = model(batch_input_patch)
+                
+                # Store output patches
+                flow_patches.append(outputs['flow_component'])
+                noise_patches.append(outputs['noise_component'])
+            
+            # Concatenate patch outputs
+            flow_patches = torch.cat(flow_patches, dim=0)
+            noise_patches = torch.cat(noise_patches, dim=0)
+            
+            # Calculate loss on patches
+            if loss_fn.__name__ == 'custom_loss':
+                total_loss = loss_fn(
+                    flow_patches, 
+                    noise_patches, 
+                    input_patches, 
+                    target_patches, 
+                    loss_parameters=loss_parameters, 
+                    debug=debug)
+            else:
+                total_loss = loss_fn(
+                    flow_patches, 
+                    target_patches)
+            
         if is_training and optimizer:
+            # Debug parameter changes before step (first epoch only)
             if debug and epoch == 0:
                 params_before = [p.clone().detach() for p in model.parameters()]
             
@@ -159,7 +201,7 @@ def process_batch2(dataloader, model, history, epoch, num_epochs, optimizer, los
                 print(f"Parameters changed: {any_change}")
 
         # Track losses
-        noise_loss = 0  # Placeholder, adjust if you calculate this elsewhere
+        noise_loss = 0  # Placeholder
         running_loss += total_loss.item()
         running_flow_loss += total_loss.item()
         running_noise_loss += 0
@@ -171,12 +213,10 @@ def process_batch2(dataloader, model, history, epoch, num_epochs, optimizer, los
             'noise_loss': noise_loss
         })
 
-    # Calculate average losses for the epoch
     avg_loss = running_loss / len(dataloader)
     avg_flow_loss = running_flow_loss / len(dataloader)
     avg_noise_loss = running_noise_loss / len(dataloader)
     
-    # Only update history in training mode
     if is_training:
         history['loss'].append(avg_loss)
         history['flow_loss'].append(avg_flow_loss)
@@ -189,12 +229,41 @@ def process_batch2(dataloader, model, history, epoch, num_epochs, optimizer, los
         random.seed(epoch)
         random_idx = random.randint(0, batch_inputs.size(0)-1)
         
-        fig, ax = plt.subplots(1, 3, figsize=(15, 5))
-        ax[0].imshow(batch_inputs[0][0].cpu().numpy(), cmap='gray')
-        ax[1].imshow(batch_targets[0][0].cpu().numpy(), cmap='gray')
-        ax[2].imshow(outputs[0][0].cpu().numpy(), cmap='gray')
-        plt.show()
+        # Use a single image for visualization
+        single_input = batch_inputs[random_idx:random_idx+1]
+        single_target = batch_targets[random_idx:random_idx+1]
         
+        # Extract patches and process
+        with torch.no_grad():
+            vis_patches, vis_locations = extract_patches(single_input, patch_size=patch_size)
+            outputs = model(vis_patches)
+            
+            # Reconstruct full image from patches
+            flow_full = reconstruct_from_patches(
+                outputs['flow_component'], 
+                vis_locations, 
+                single_input.shape,
+                patch_size=patch_size
+            )
+            
+            noise_full = reconstruct_from_patches(
+                outputs['noise_component'], 
+                vis_locations, 
+                single_input.shape,
+                patch_size=patch_size
+            )
+        
+        visualize_progress_patch(
+            model, 
+            single_input, 
+            single_target, 
+            masked_tensor=None,
+            epoch=epoch+1,
+            predicted_flow=flow_full,
+            predicted_noise=noise_full
+        )
+        plt.close()
+
     return avg_loss
 
 def train(train_dataloader, val_dataloader, checkpoint, checkpoint_path, model, history, optimizer, 
@@ -326,7 +395,6 @@ def get_loaders(dataset, batch_size, val_split=0.2, device='cuda', seed=42):
     print(f"Dataset split: {train_size} training samples, {val_size} validation samples")
     
     return train_loader, val_loader
-    
 
 
 def train_speckle_separation_module(train_config, loss_fn, loss_name):
@@ -340,7 +408,8 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
     n_images_per_patient = train_config['n_images']
 
     #dataset = paired_octa_preprocessing(start, n_patients, n_images_per_patient, n_neighbours = 10, threshold=65, sample=False, post_process_size=10)
-    dataset = paired_octa_preprocessing_binary(start, n_patients, n_images_per_patient, n_neighbours = 10, threshold=85, sample=False, post_process_size=10)
+    dataset = paired_octa_preprocessing_binary(start, n_patients, n_images_per_patient, n_neighbours = 4, threshold=99, sample=False, post_process_size=2)
+    #dataset = process_octa_segmentation_batch_patches(start, n_patients, n_images_per_patient, n_neighbours = 10, threshold=85, sample=False, post_process_size=10)
 
     print(f"Dataset size: {len(dataset)} patients")
 
@@ -445,6 +514,8 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
           loss_fn, loss_parameters, debug, 
           n2v_weight, fast, visualise)
     
+#############
+
 def train_ssm():
 
 

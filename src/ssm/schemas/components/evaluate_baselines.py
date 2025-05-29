@@ -6,6 +6,7 @@ from ssm.models.unet.large_unet_attention import LargeUNetAtt
 from ssm.models.unet.large_unet_good import LargeUNet
 from ssm.models.unet.small_unet import SmallUNet
 from ssm.models.unet.small_unet_att import SmallUNetAtt
+from ssm.models.unet.blind_large_unet_attention import BlindLargeUNetAtt
 
 def load_model(config, verbose=False, last=False, best=False):
     use_speckle = config['speckle_module']['use']
@@ -45,6 +46,8 @@ def load_model(config, verbose=False, last=False, best=False):
         model = SmallUNetAtt().to(device)
     elif model == "LargeUNetAtt":
         model = LargeUNetAtt(in_channels=1, out_channels=1).to(device)
+    elif model == "BlindLargeUNetAtt":
+        model = BlindLargeUNetAtt(in_channels=1, out_channels=1).to(device)
     else:
         raise ValueError(f"Model {model} not supported")
 

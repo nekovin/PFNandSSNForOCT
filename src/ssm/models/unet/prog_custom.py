@@ -10,7 +10,6 @@ class ProgLargeUNet(LargeUNet):
     def __init__(self, in_channels=1, out_channels=1, bilinear=True):
         super(ProgLargeUNet, self).__init__(in_channels, out_channels, bilinear)
         
-        # Add a learnable residual weight parameter like in ProgUNet
         self.residual_weight = nn.Parameter(torch.tensor(0.2))
     
     def forward(self, x, n_targets=1, target_size=None):
@@ -39,7 +38,6 @@ class ProgLargeUNet(LargeUNet):
         
         x = self.outc(x)
         
-        # Apply residual connection and handle multiple outputs like ProgUNet
         outputs = [
             (1 - self.residual_weight) * x + self.residual_weight * input_image
             for _ in range(n_targets)

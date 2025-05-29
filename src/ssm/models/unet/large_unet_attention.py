@@ -86,4 +86,4 @@ class LargeUNetAtt(nn.Module):
         return x
     
     def __str__(self):
-        return "LargeUNet"
+        return "LargeUNetAtt"

@@ -2,6 +2,8 @@
 import time
 import torch
 from ssm.utils.eval_utils.visualise import plot_images
+from ssm.utils.data_utils.patch_processing import extract_patches, reconstruct_from_patches
+import torch.nn.functional as F
 
 from ssm.utils import evaluate_oct_denoising
     
@@ -78,267 +80,14 @@ def threshold_flow_component(t_img: torch.Tensor, threshold: float = 0.01, botto
     # Apply both masks
     return binary_mask * bottom_mask
 
-def extract_patches(image, patch_size=64, stride=32):
-    """Extract patches from an image with given patch size and stride."""
-    stride = patch_size // 4
-    # Handle different image formats
-    if len(image.shape) == 4:  # (B, C, H, W)
-        b, c, h, w = image.shape
-    elif len(image.shape) == 3:  # (C, H, W)
-        image = image.unsqueeze(0)  # Add batch dimension
-        b, c, h, w = image.shape
-    elif len(image.shape) == 2:  # (H, W)
-        image = image.unsqueeze(0).unsqueeze(0)  # Add batch and channel dimensions
-        b, c, h, w = image.shape
-    else:
-        raise ValueError(f"Unexpected image shape: {image.shape}")
-    
-    all_patches = []
-    all_locations = []
-    
-    for i in range(b):
-        img_patches = []
-        img_locations = []
-        
-        for y in range(0, h - patch_size + 1, stride):
-            for x in range(0, w - patch_size + 1, stride):
-                patch = image[i, :, y:y+patch_size, x:x+patch_size]
-                img_patches.append(patch)
-                img_locations.append((y, x))
-        
-        all_patches.extend(img_patches)
-        all_locations.extend([(i, y, x) for y, x in img_locations])
-    
-    return torch.stack(all_patches), all_locations
 
-def reconstruct_from_patches(patches, locations, image_shape, patch_size=64):
-    """Reconstruct an image from patches based on their locations."""
-    # Handle different shape formats
-    if len(image_shape) == 4:  # (B, C, H, W)
-        b, c, h, w = image_shape
-    elif len(image_shape) == 3:  # (C, H, W)
-        c, h, w = image_shape
-        b = 1
-    else:
-        raise ValueError(f"Unexpected image shape: {image_shape}")
-    
-    # Check location format
-    sample_location = locations[0]
-    if len(sample_location) == 3:  # (batch_idx, y, x)
-        # Need to group by batch
-        batch_reconstructed = []
-        
-        # Group patches by batch index
-        batch_patches = [[] for _ in range(b)]
-        batch_locations = [[] for _ in range(b)]
-        
-        for i, (patch, location) in enumerate(zip(patches, locations)):
-            batch_idx, y, x = location
-            batch_patches[batch_idx].append(patch)
-            batch_locations[batch_idx].append((y, x))
-        
-        # Reconstruct each batch item
-        for i in range(b):
-            if len(batch_patches[i]) > 0:
-                # Call recursively with simpler locations
-                reconstructed = reconstruct_from_patches(
-                    torch.stack(batch_patches[i]), 
-                    batch_locations[i],
-                    (c, h, w),  # Single image shape
-                    patch_size
-                )
-                batch_reconstructed.append(reconstructed)
-            else:
-                # Empty tensor if no patches for this batch
-                batch_reconstructed.append(torch.zeros((c, h, w), device=patches[0].device))
-        
-        return torch.stack(batch_reconstructed)
-    
-    elif len(sample_location) == 2:  # (y, x)
-        # Simple reconstruction for a single image
-        reconstructed = torch.zeros((c, h, w), device=patches[0].device)
-        weights = torch.zeros((h, w), device=patches[0].device)
-        
-        for patch, (y, x) in zip(patches, locations):
-            reconstructed[:, y:y+patch_size, x:x+patch_size] += patch
-            weights[y:y+patch_size, x:x+patch_size] += 1
-        
-        # Average overlapping regions
-        weights = weights.unsqueeze(0).repeat(c, 1, 1)
-        weights[weights == 0] = 1  # Avoid division by zero
-        reconstructed = reconstructed / weights
-        
-        return reconstructed
-    
-    else:
-        raise ValueError(f"Unexpected location format: {sample_location}")
-    
-
-def reconstruct_from_patches(patches, locations, image_shape, patch_size=64):
-    """Reconstruct an image from patches based on their locations."""
-    # Handle different shape formats
-    if len(image_shape) == 4:  # (B, C, H, W)
-        b, c, h, w = image_shape
-    elif len(image_shape) == 3:  # (C, H, W)
-        c, h, w = image_shape
-        b = 1
-    else:
-        raise ValueError(f"Unexpected image shape: {image_shape}")
-    
-    # Check location format
-    sample_location = locations[0]
-    if len(sample_location) == 3:  # (batch_idx, y, x)
-        # Need to group by batch
-        batch_reconstructed = []
-        
-        # Group patches by batch index
-        batch_patches = [[] for _ in range(b)]
-        batch_locations = [[] for _ in range(b)]
-        
-        for i, (patch, location) in enumerate(zip(patches, locations)):
-            batch_idx, y, x = location
-            batch_patches[batch_idx].append(patch)
-            batch_locations[batch_idx].append((y, x))
-        
-        # Reconstruct each batch item
-        for i in range(b):
-            if len(batch_patches[i]) > 0:
-                # Call recursively with simpler locations
-                reconstructed = reconstruct_from_patches(
-                    torch.stack(batch_patches[i]), 
-                    batch_locations[i],
-                    (c, h, w),  # Single image shape
-                    patch_size
-                )
-                batch_reconstructed.append(reconstructed)
-            else:
-                # Empty tensor if no patches for this batch
-                batch_reconstructed.append(torch.zeros((c, h, w), device=patches[0].device))
-        
-        return torch.stack(batch_reconstructed)
-    
-    elif len(sample_location) == 2:  # (y, x)
-        # Simple reconstruction for a single image
-        reconstructed = torch.zeros((c, h, w), device=patches[0].device)
-        weights = torch.zeros((h, w), device=patches[0].device)
-        
-        for patch, (y, x) in zip(patches, locations):
-            reconstructed[:, y:y+patch_size, x:x+patch_size] += patch
-            weights[y:y+patch_size, x:x+patch_size] += 1
-        
-        # Average overlapping regions
-        weights = weights.unsqueeze(0).repeat(c, 1, 1)
-        weights[weights == 0] = 1  # Avoid division by zero
-        reconstructed = reconstructed / weights
-        
-        return reconstructed
-    
-    else:
-        raise ValueError(f"Unexpected location format: {sample_location}")
-
-def reconstruct_from_patches(patches, locations, image_shape, patch_size=64):
-    """Reconstruct an image from patches based on their locations."""
-    # Handle different shape formats
-    if len(image_shape) == 4:  # (B, C, H, W)
-        b, c, h, w = image_shape
-    elif len(image_shape) == 3:  # (C, H, W)
-        c, h, w = image_shape
-        b = 1
-    else:
-        raise ValueError(f"Unexpected image shape: {image_shape}")
-    
-    # Check location format
-    sample_location = locations[0]
-    if len(sample_location) == 3:  # (batch_idx, y, x)
-        # Need to group by batch
-        batch_reconstructed = []
-        
-        # Group patches by batch index
-        batch_patches = [[] for _ in range(b)]
-        batch_locations = [[] for _ in range(b)]
-        
-        for i, (patch, location) in enumerate(zip(patches, locations)):
-            batch_idx, y, x = location
-            batch_patches[batch_idx].append(patch)
-            batch_locations[batch_idx].append((y, x))
-        
-        # Reconstruct each batch item
-        for i in range(b):
-            if len(batch_patches[i]) > 0:
-                # Call recursively with simpler locations
-                reconstructed = reconstruct_from_patches(
-                    torch.stack(batch_patches[i]), 
-                    batch_locations[i],
-                    (c, h, w),  # Single image shape
-                    patch_size
-                )
-                batch_reconstructed.append(reconstructed)
-            else:
-                # Empty tensor if no patches for this batch
-                batch_reconstructed.append(torch.zeros((c, h, w), device=patches[0].device))
-        
-        return torch.stack(batch_reconstructed)
-    
-    elif len(sample_location) == 2:  # (y, x)
-        # Simple reconstruction for a single image
-        reconstructed = torch.zeros((c, h, w), device=patches[0].device)
-        weights = torch.zeros((h, w), device=patches[0].device)
-        
-        # Add extra padding around image edges
-        pad_size = patch_size // 2
-        padded_reconstructed = torch.zeros((c, h + 2*pad_size, w + 2*pad_size), device=patches[0].device)
-        padded_weights = torch.zeros((h + 2*pad_size, w + 2*pad_size), device=patches[0].device)
-        
-        for patch, (y, x) in zip(patches, locations):
-            # Add patches to padded reconstruction at offset positions
-            padded_y = y + pad_size
-            padded_x = x + pad_size
-            padded_reconstructed[:, padded_y:padded_y+patch_size, padded_x:padded_x+patch_size] += patch
-            padded_weights[padded_y:padded_y+patch_size, padded_x:padded_x+patch_size] += 1
-        
-        # Handle edge weighting - add extra virtual patches for corners and edges
-        # This ensures corners get similar weight averaging as center regions
-        for y in range(0, pad_size, patch_size//2):
-            for x in range(0, w + pad_size, patch_size//2):
-                # Add weight for top edge
-                if y < h and padded_weights[y, pad_size+x] > 0:
-                    padded_weights[0:pad_size, pad_size+x] += 1
-                
-                # Add weight for bottom edge
-                if y < h and padded_weights[h+pad_size-1-y, pad_size+x] > 0:
-                    padded_weights[h+pad_size:h+2*pad_size, pad_size+x] += 1
-        
-        for x in range(0, pad_size, patch_size//2):
-            for y in range(0, h + pad_size, patch_size//2):
-                # Add weight for left edge
-                if x < w and padded_weights[pad_size+y, x] > 0:
-                    padded_weights[pad_size+y, 0:pad_size] += 1
-                
-                # Add weight for right edge
-                if x < w and padded_weights[pad_size+y, w+pad_size-1-x] > 0:
-                    padded_weights[pad_size+y, w+pad_size:w+2*pad_size] += 1
-        
-        # Normalize and extract the central region
-        padded_weights = padded_weights.unsqueeze(0).repeat(c, 1, 1)
-        padded_weights[padded_weights == 0] = 1  # Avoid division by zero
-        padded_reconstructed = padded_reconstructed / padded_weights
-        
-        # Extract the central region (discard padding)
-        reconstructed = padded_reconstructed[:, pad_size:pad_size+h, pad_size:pad_size+w]
-        
-        return reconstructed
-    
-    else:
-        raise ValueError(f"Unexpected location format: {sample_location}")
 
 def process_batch(
         data_loader, model, criterion, optimizer, epoch, 
-        epochs, device, visualise, speckle_module, alpha, scheduler, sample):
+        epochs, device, visualise, speckle_module, alpha, scheduler, sample, patch_size, stride):
     mode = 'train' if model.training else 'val'
     
-    epoch_loss = 0
-    patch_size = 128 
-    stride = 48      # Choose appropriate stride
+    epoch_loss = 0 
 
     metrics = None
     
@@ -350,8 +99,7 @@ def process_batch(
         input_patches, patch_locations = extract_patches(input_imgs, patch_size, stride)
         target_patches, _ = extract_patches(target_imgs, patch_size, stride)
         
-        # Process patches in sub-batches to avoid memory issues
-        sub_batch_size = 16  # Adjust based on your GPU memory
+        sub_batch_size = 16 
         total_loss = 0
         all_output_patches = []
         
@@ -366,8 +114,6 @@ def process_batch(
                 flow_inputs = normalize_image_torch(flow_inputs)
                 
                 outputs = model(input_sub_batch)
-                #all_output_patches.extend(outputs)
-                #all_output_patches.extend(outputs.detach().clone())
                 for j in range(outputs.size(0)):
                     all_output_patches.append(outputs[j].detach().clone())
                 
@@ -375,12 +121,11 @@ def process_batch(
                 flow_outputs = flow_outputs['flow_component'].detach()
                 flow_outputs = normalize_image_torch(flow_outputs)
                 
-                flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
-                patch_loss = criterion(outputs, target_sub_batch) + flow_loss * alpha
+                flow_loss_abs = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                flow_loss_mse = F.mse_loss(flow_outputs, flow_inputs) 
+                patch_loss = criterion(outputs, target_sub_batch) + flow_loss_abs * alpha + flow_loss_mse * alpha
             else:
                 outputs = model(input_sub_batch)
-                #all_output_patches.extend(outputs)
-                #all_output_patches.extend(outputs.detach().clone())
                 for j in range(outputs.size(0)):
                     all_output_patches.append(outputs[j].detach().clone())
                 patch_loss = criterion(outputs, target_sub_batch)
@@ -418,7 +163,7 @@ def process_batch(
                     sample_output[0][0]
                 ]
                 losses = {
-                    'Flow Loss': flow_loss.item(),
+                    'Flow Loss': flow_loss_abs.item(),
                     'Total Loss': total_loss / len(input_patches)
                 }
             else:
@@ -443,8 +188,8 @@ def process_batch(
         loss_value = total_loss / len(input_patches)
         epoch_loss += loss_value
         
-        if mode != 'train':
-            scheduler.step(loss_value)
+    if mode != 'train':
+        scheduler.step(loss_value)
 
     #return epoch_loss / len(data_loader)
     if metrics is not None:
@@ -455,7 +200,7 @@ def process_batch(
 def train_n2n_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, 
               batch_size, lr, best_val_loss, checkpoint_path = None,device='cuda', visualise=False, 
               speckle_module=None, alpha=1, save=False, scheduler=None, best_metrics_score=None, train_config=None,
-              sample=None):
+              sample=None, patch_size=128, stride=48):
 
     last_checkpoint_path = checkpoint_path + f'_patched_last_checkpoint.pth'
     best_checkpoint_path = checkpoint_path + f'_patched_best_checkpoint.pth'
@@ -470,12 +215,15 @@ def train_n2n_patch(model, train_loader, val_loader, optimizer, criterion, start
         train_loss = process_batch(
             train_loader, model, criterion, optimizer, epoch, 
             starting_epoch+epochs, device, visualise, speckle_module, alpha, 
-            scheduler, sample)
+            scheduler, sample, patch_size, stride)
 
         model.eval()
         visualise = True
         with torch.no_grad():
-            val_loss, val_metrics = process_batch(val_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, device, visualise, speckle_module, alpha, scheduler, sample)
+            val_loss, val_metrics = process_batch(
+                val_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, 
+                device, visualise, speckle_module, alpha, scheduler, sample,
+                patch_size, stride)
             
             val_metrics_score = (
                 val_metrics.get('snr', 0) * 0.3 + 

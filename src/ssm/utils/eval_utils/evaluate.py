@@ -70,6 +70,11 @@ def evaluate(image, reference, model, method):
             original_image = image.cpu().numpy()
 
     denoised = denoise_image(model, image_tensor, device='cuda')
+
+    denoised = denoised[-1]
+
+    print(f"Image shape: {image_tensor.shape}")
+    print(f"Denoised shape: {denoised.shape}")
     
     # Convert denoised to numpy
     if isinstance(denoised, torch.Tensor):
@@ -150,5 +155,5 @@ def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
         except Exception as e:
             print(f"Error processing patient {patient}: {e}")
     
-    print(f"Successfully loaded {len(sdoct_data)} patients")
+    print(f"Successfully loaded {len(sdoct_data)} SDOCT patients")
     return sdoct_data

@@ -6,37 +6,11 @@ import torch
 import os
 import random
 from ssm.utils.config import get_config
+from ssm.data import get_paired_loaders
 
-def main(method=None):
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    
-    config_path = os.getenv("N2_CONFIG_PATH")
-
-    config = get_config(config_path)
-
-    n_patients = config['training']['n_patients']
-    
-    override_config = {
-        "eval" : {
-            "ablation": f"patient_count/{n_patients}_patients",
-            "n_patients" : n_patients
-            }
-        }
-
-    all_metrics = {}
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
-    dataset = load_sdoct_dataset(sdoct_path)
-
-    # random sample
-    sample = random.choice(list(dataset.keys()))
-    raw_image = dataset[sample]["raw"][0][0]
-    reference = dataset[sample]["avg"][0][0]
-
-
-    def normalise_sample(raw_image, reference):
+def normalise_sample(raw_image, reference):
         '''
         sample = random.choice(list(dataset.keys()))
         raw_image = dataset[sample]["raw"][0][0]
@@ -70,11 +44,62 @@ def main(method=None):
         reference = reference.to(device)
 
         return raw_image, reference
+
+def main(method=None, soct=True):
+
+    config_path = os.getenv("N2_CONFIG_PATH")
+
+    config = get_config(config_path)
+
+    n_patients = config['training']['n_patients']
     
-    raw_image, reference = normalise_sample(raw_image, reference)
+    override_config = {
+        "eval" : {
+            "ablation": f"patient_count/{n_patients}_patients",
+            "n_patients" : n_patients
+            }
+        }
+
+    all_metrics = {}
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    if soct:
+
+        sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
+        dataset = load_sdoct_dataset(sdoct_path)
+
+        # random sample
+        sample = random.choice(list(dataset.keys()))
+        raw_image = dataset[sample]["raw"][0][0]
+        reference = dataset[sample]["avg"][0][0]
+        raw_image, reference = normalise_sample(raw_image, reference)
+    
+    else:
+        n_images_per_patient = config['training']['n_images_per_patient']
+        batch_size = config['training']['batch_size']
+        start = 1
+        train_loader, val_loader = get_paired_loaders(start, 2, 5, batch_size)
+        print(f"Train loader size: {len(train_loader.dataset)}")
         
+        # Get actual tensor data, not shape
+        batch_data = next(iter(train_loader))
+        sample_batch = batch_data[0]  # Get input tensor batch
+        print(f"Sample batch shape: {sample_batch.shape}")
+        
+        # Get first sample from batch
+        raw_image = sample_batch[0]  # Shape: (channels, height, width)
+        reference = sample_batch[0]  # Using same as reference
+        
+        # Add batch dimension
+        raw_image = raw_image.unsqueeze(0).to(device)  # Shape: (1, channels, height, width)
+        reference = reference.unsqueeze(0).to(device)
 
 
+    
+    
+    
+    
 
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     ax[0].imshow(raw_image.cpu().numpy()[0][0], cmap="gray")
@@ -82,6 +107,7 @@ def main(method=None):
     ax[1].imshow(reference.cpu().numpy()[0][0], cmap="gray")
     ax[1].set_title("Reference Image")
     plt.show()
+
 
     fig, ax = plt.subplots(3, 2, figsize=(15, 15))
 
@@ -93,8 +119,8 @@ def main(method=None):
     # Best checkpoints
     try:    
         n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config)
-        metrics['n2v'] = n2v_metrics
-        all_metrics['n2v'] = n2v_metrics
+        metrics[f'{method}'] = n2v_metrics
+        all_metrics[f'{method}'] = n2v_metrics
         ax[0][0].imshow(n2v_denoised, cmap="gray")
         ax[0][0].set_title(f"{method} Denoised")
     except Exception as e:
@@ -104,8 +130,8 @@ def main(method=None):
 
     try:
         n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config)
-        metrics['n2v_ssm'] = n2v_ssm_metrics
-        all_metrics['n2v_ssm'] = n2v_ssm_metrics
+        metrics[f'{method}_ssm'] = n2v_ssm_metrics
+        all_metrics[f'{method}_ssm'] = n2v_ssm_metrics
         ax[0][1].imshow(n2v_ssm_denoised, cmap="gray")
         ax[0][1].set_title(f"{method} SSM Denoised")
     except Exception as e:
@@ -116,8 +142,8 @@ def main(method=None):
     # Last checkpoints
     try:
         n2v_metrics_last, n2v_denoised_last = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, last=True)
-        metrics_last['n2v'] = n2v_metrics_last
-        all_metrics['n2v_last'] = n2v_metrics_last
+        metrics_last[f'{method}'] = n2v_metrics_last
+        all_metrics[f'{method}_last'] = n2v_metrics_last
         ax[1][0].imshow(n2v_denoised_last, cmap="gray")
         ax[1][0].set_title(f"{method} Denoised Last")
     except Exception as e:
@@ -127,8 +153,8 @@ def main(method=None):
 
     try:
         n2v_ssm_metrics_last, n2v_ssm_denoised_last = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, last=True)
-        metrics_last['n2v_ssm'] = n2v_ssm_metrics_last
-        all_metrics['n2v_ssm_last'] = n2v_ssm_metrics_last
+        metrics_last[f'{method}_ssm'] = n2v_ssm_metrics_last
+        all_metrics[f'{method}_ssm_last'] = n2v_ssm_metrics_last
         ax[1][1].imshow(n2v_ssm_denoised_last, cmap="gray")
         ax[1][1].set_title(f"{method} SSM Denoised Last")
     except Exception as e:
@@ -139,8 +165,8 @@ def main(method=None):
     # Best metrics checkpoints
     try:
         n2v_metrics_best, n2v_denoised_best = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, best=True)
-        metrics_best['n2v'] = n2v_metrics_best
-        all_metrics['n2v_best'] = n2v_metrics_best
+        metrics_best[f'{method}'] = n2v_metrics_best
+        all_metrics[f'{method}_best'] = n2v_metrics_best
         ax[2][0].imshow(n2v_denoised_best, cmap="gray")
         ax[2][0].set_title(f"{method} Denoised Best")
     except Exception as e:
@@ -150,8 +176,8 @@ def main(method=None):
 
     try:
         n2v_ssm_metrics_best, n2v_ssm_denoised_best = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, best=True)
-        metrics_best['n2v_ssm'] = n2v_ssm_metrics_best
-        all_metrics['n2v_ssm_best'] = n2v_ssm_metrics_best
+        metrics_best[f'{method}_ssm'] = n2v_ssm_metrics_best
+        all_metrics[f'{method}_ssm_best'] = n2v_ssm_metrics_best
         ax[2][1].imshow(n2v_ssm_denoised_best, cmap="gray")
         ax[2][1].set_title(f"{method} SSM Denoised Best")
     except Exception as e:
@@ -165,6 +191,21 @@ def main(method=None):
 
     fig.tight_layout()
     plt.show()
+
+    from ssm.utils import auto_select_roi_using_flow
+
+    masks = auto_select_roi_using_flow(raw_image[0][0].cpu().numpy(), device)
+    mask_fig, ax_mask = plt.subplots(1, 3, figsize=(15, 5))
+    ax_mask[0].imshow(raw_image[0][0].cpu().numpy(), cmap='gray')
+    ax_mask[0].set_title('Original Image')
+    ax_mask[1].imshow(masks[0], cmap='gray')
+    ax_mask[1].set_title('Foreground Mask')
+    ax_mask[2].imshow(masks[1], cmap='gray')
+    ax_mask[2].set_title('Background Mask')
+    plt.tight_layout()
+    plt.show()
+
+    ###
         
 
 if __name__ == "__main__":
