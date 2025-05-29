@@ -1,8 +1,6 @@
 import numpy as np
 import torch
-from skimage import io
 from torch.utils.data import Dataset, DataLoader
-
 from ssm.utils import paired_preprocessing
 
 class PairedOCTDataset(Dataset):
@@ -15,9 +13,9 @@ class PairedOCTDataset(Dataset):
         
         for patient_id, data in dataset_dict.items():
             print(f"Processing patient {patient_id} with {len(data)} images")
-            for i in range(len(data)):  # Changed from range(len(data) - 1)
-                input_image = data[i][0]  # This is already the input image from paired_preprocessing
-                target_image = data[i][1]  # This is already the target image from paired_preprocessing
+            for i in range(len(data)):
+                input_image = data[i][0] 
+                target_image = data[i][1]  
 
                 if input_image.shape != target_image.shape:
                     print(f"Shape mismatch: {input_image.shape} vs {target_image.shape}")
