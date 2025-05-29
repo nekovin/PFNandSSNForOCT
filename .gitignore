@@ -63,3 +63,5 @@ configs
 src/ssm/old
 
 checkpoints_old
+
+**/old/
