@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="ssm",
-    version="0.4.1",
+    name="fpss",
+    version="0.4.2",
     author="Calvin Leighton",
     package_dir={"": "src"},
     packages=find_packages(where="src"),

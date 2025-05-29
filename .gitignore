@@ -59,7 +59,11 @@ noise2void
 utils/old
 schemas/phf
 old/*
-configs
+configs/eval.yaml
+configs/n2_config.yaml
+configs/preprocessing.yaml
+configs/ssm_config.yaml
+
 src/ssm/old
 
 checkpoints_old
