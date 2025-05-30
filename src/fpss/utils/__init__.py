@@ -5,7 +5,6 @@ from .data_utils.oct_preprocessing import *
 from .data_utils.paired_preprocessing import *
 from .data_utils.standard_preprocessing import *
 from .data_utils.helper import *
-from .data_utils.pfn import *
 from .eval_utils.evaluate import *
 from .eval_utils.visualise import *
 from .eval_utils.metrics import *

@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import matplotlib.pyplot as plt
 from fpss.utils.data_utils.standard_preprocessing import normalize_image
-from fpss.models.ssm.ssm_attention import SpatialAttention
+from fpss.models.fpss.fpss_attention import SpatialAttention
 
 def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch):
     """

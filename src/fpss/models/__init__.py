@@ -9,8 +9,5 @@ from .unet.prog_unet import *
 from .unet.unet_2 import *
 from .unet.unet_superres import *
 
-from .ssm.ssm import *
-from .ssm.ssm_attention import *
-from .ssm.ssm_attention_simple import *
-
+from .fpss.fpss_attention import *
 from .components.components import *

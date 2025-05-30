@@ -5,7 +5,7 @@ from fpss.models.unet.unet_2 import UNet2
 from fpss.models.unet.large_unet import LargeUNetAttention, LargeUNet2, LargeUNet3
 from fpss.models.unet.large_unet_good import LargeUNet
 from fpss.models.unet.large_unet_attention import LargeUNetAtt
-from fpss.models.ssm.ssm_attention import SpeckleSeparationUNetAttention
+from fpss.models.fpss.fpss_attention import FPSSAttention
 from fpss.models.unet.small_unet import SmallUNet
 from fpss.models.unet.small_unet_att import SmallUNetAtt
 
@@ -148,7 +148,7 @@ def train(config, method, ssm):
         f.write(f"Number of images per patient: {n_images_per_patient}\n")
 
     if config['speckle_module']['use'] is True or ssm:
-        speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)
+        speckle_module = FPSSAttention(input_channels=1, feature_dim=32).to(device)
         try:
             print("Loading ssm model from checkpoint...")
             ssm_checkpoint_path = train_config['ssm_checkpoint_path']

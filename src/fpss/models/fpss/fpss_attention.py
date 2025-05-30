@@ -1,90 +1,12 @@
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import numpy as np
-import matplotlib.pyplot as plt
-from tqdm import tqdm
-from torch.utils.data import DataLoader, TensorDataset
-import os 
-import sys
-sys.path.append(r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\src")
+from .components import ChannelAttention, SpatialAttention
 
-class SpeckleSeparationModule(nn.Module):
+
+class FPSSAttention(nn.Module):
     """
-    A simplified module to separate OCT speckle into:
-    - Informative speckle (related to blood flow)
-    - Noise speckle (to be removed)
+    Enhanced deeper U-Net architecture for OCT speckle separation with attention mechanisms
     """
-    
-    def __init__(self, input_channels=1, feature_dim=32):
-        """
-        Initialize the Speckle Separation Module
-        
-        Args:
-            input_channels: Number of input image channels (default: 1 for grayscale OCT)
-            feature_dim: Dimension of feature maps
-        """
-        super(SpeckleSeparationModule, self).__init__()
-        
-        # Feature extraction
-        self.feature_extraction = nn.Sequential(
-            nn.Conv2d(input_channels, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True)
-        )
-        
-        # Flow component branch
-        self.flow_branch = nn.Sequential(
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, input_channels, kernel_size=1),
-            nn.Tanh()
-        )
-        
-        # Noise component branch
-        self.noise_branch = nn.Sequential(
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, input_channels, kernel_size=1)
-        )
-    
-    def forward(self, x):
-        """
-        Forward pass of the Speckle Separation Module
-        
-        Args:
-            x: Input OCT image tensor of shape [B, C, H, W]
-            
-        Returns:
-            Dictionary containing:
-                - 'flow_component': Flow-related speckle component
-                - 'noise_component': Noise-related speckle component
-        """
-        # Extract features
-        features = self.feature_extraction(x)
-        
-        # Separate into flow and noise components
-        flow_component = self.flow_branch(features)
-        noise_component = self.noise_branch(features)
-        
-        return {
-            'flow_component': flow_component,
-            'noise_component': noise_component
-        }
-    
-######################
-    
-class SpeckleSeparationUNet(nn.Module):
-    """
-    Enhanced deeper U-Net architecture for OCT speckle separation
-    """
-    
     def __init__(self, input_channels=1, feature_dim=32, depth=5, block_depth=3):
         """
         Initialize the Deeper Speckle Separation U-Net Module
@@ -95,12 +17,17 @@ class SpeckleSeparationUNet(nn.Module):
             depth: Depth of the U-Net (number of downsampling/upsampling operations)
             block_depth: Number of convolution layers in each encoder/decoder block
         """
-        super(SpeckleSeparationUNet, self).__init__()
+        super(FPSSAttention, self).__init__()
         
         self.encoder_blocks = nn.ModuleList()
+        self.encoder_attentions = nn.ModuleList()  # New attention modules for encoder
         self.decoder_blocks = nn.ModuleList()
+        self.decoder_attentions = nn.ModuleList()  # New attention modules for decoder
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.depth = depth
+        self.input_channels = input_channels
+        self.feature_dim = feature_dim
+        self.block_depth = block_depth
         
         # Encoder path with deeper blocks
         in_channels = input_channels
@@ -120,9 +47,17 @@ class SpeckleSeparationUNet(nn.Module):
                 encoder_block.append(nn.ReLU(inplace=True))
             
             self.encoder_blocks.append(nn.Sequential(*encoder_block))
+            
+            # Add attention modules after each encoder block
+            self.encoder_attentions.append(
+                nn.Sequential(
+                    ChannelAttention(out_channels),
+                    SpatialAttention()
+                )
+            )
+            
             in_channels = out_channels
         
-        # Bottleneck
         bottleneck_channels = feature_dim * (2**min(depth, 3))
         bottleneck = []
         for _ in range(block_depth + 1):  # Slightly deeper bottleneck
@@ -132,6 +67,12 @@ class SpeckleSeparationUNet(nn.Module):
             in_channels = bottleneck_channels
         
         self.bottleneck = nn.Sequential(*bottleneck)
+        
+        # Bottleneck attention
+        self.bottleneck_attention = nn.Sequential(
+            ChannelAttention(bottleneck_channels),
+            SpatialAttention()
+        )
         
         # Decoder path with deeper blocks
         in_channels = bottleneck_channels
@@ -151,31 +92,16 @@ class SpeckleSeparationUNet(nn.Module):
                 decoder_block.append(nn.ReLU(inplace=True))
             
             self.decoder_blocks.append(nn.Sequential(*decoder_block))
+            
+            # Add attention modules after each decoder block
+            self.decoder_attentions.append(
+                nn.Sequential(
+                    ChannelAttention(out_channels),
+                    SpatialAttention()
+                )
+            )
+            
             in_channels = out_channels
-        
-        # Output layers with residual connections
-        self.flow_branch = nn.Sequential(
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, input_channels, kernel_size=1)
-        )
-        
-        self.noise_branch = nn.Sequential(
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
-            nn.BatchNorm2d(feature_dim),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(feature_dim, input_channels, kernel_size=1)
-        )
-        
-        # Upsampling layer
-        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
         
         # Add dilated convolutions for wider receptive field
         self.dilation_block = nn.Sequential(
@@ -189,50 +115,89 @@ class SpeckleSeparationUNet(nn.Module):
             nn.BatchNorm2d(feature_dim),
             nn.ReLU(inplace=True)
         )
-    
-    def forward(self, x):
-        """
-        Forward pass of the Speckle Separation U-Net
         
-        Args:
-            x: Input OCT image tensor of shape [B, C, H, W]
-            
-        Returns:
-            Dictionary containing:
-                - 'flow_component': Flow-related speckle component
-                - 'noise_component': Noise-related speckle component
-        """
-        # Store encoder outputs for skip connections
+        # Final attention after dilation
+        self.final_attention = nn.Sequential(
+            ChannelAttention(feature_dim),
+            nn.Dropout(0.2),  # Add dropout here
+            SpatialAttention(),
+            nn.Dropout(0.2)   # And here
+        )
+        
+        # Output layers with residual connections
+        self.flow_branch = nn.Sequential(
+            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(feature_dim, input_channels, kernel_size=1),
+            #nn.Sigmoid() 
+            nn.Sigmoid()
+        )
+        
+        self.noise_branch = nn.Sequential(
+            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=1),
+            nn.BatchNorm2d(feature_dim),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(feature_dim, input_channels, kernel_size=1),
+            nn.Sigmoid()
+        )
+        
+        # Upsampling layer
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+
+    def __repr__(self):
+        return f"SpeckleSeparationUNetAttention(input_channels={self.input_channels}, feature_dim={self.feature_dim}, depth={self.depth}, block_depth={self.block_depth})"
+
+    def forward(self, x):
+
         encoder_features = []
         
-        # Encoder path
+        # Encoder path with attention
         for i in range(self.depth):
             x = self.encoder_blocks[i](x)
+            x = self.encoder_attentions[i](x) 
             encoder_features.append(x)
             if i < self.depth - 1:
                 x = self.pool(x)
         
-        # Bottleneck
+        # Bottleneck with attention
         x = self.bottleneck(x)
+        x = self.bottleneck_attention(x)
         
-        # Decoder path with skip connections
         for i in range(self.depth):
             x = self.up(x)
-            # Ensure matching sizes for concatenation
             encoder_feature = encoder_features[self.depth - i - 1]
             if x.size() != encoder_feature.size():
                 x = nn.functional.interpolate(x, size=encoder_feature.size()[2:], mode='bilinear', align_corners=True)
             x = torch.cat([x, encoder_feature], dim=1)
             x = self.decoder_blocks[i](x)
+            x = self.decoder_attentions[i](x)  # Apply attention
         
-        # Apply dilated convolutions for larger receptive field
         x = self.dilation_block(x)
+        x = self.final_attention(x) 
         
-        # Generate flow and noise components
         flow_component = self.flow_branch(x)
+        #flow_component = torch.where(flow_component > 0.01, flow_component, torch.zeros_like(flow_component)) # binary
         noise_component = self.noise_branch(x)
+
         
         return {
             'flow_component': flow_component,
             'noise_component': noise_component
         }
+    
+def get_fpss_model_attention(checkpoint_path):
+
+    model = FPSSAttention()
+    
+    if checkpoint_path:
+        checkpoint = torch.load(checkpoint_path, map_location='cpu')
+        model.load_state_dict(checkpoint['model_state_dict'])
+
+    return model

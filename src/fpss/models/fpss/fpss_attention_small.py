@@ -2,9 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class SimplifiedSpeckleSeparationModel(nn.Module):
+class SmallFPSSAttention(nn.Module):
     def __init__(self, input_channels=1, feature_dim=32, depth=4):
-        super(SimplifiedSpeckleSeparationModel, self).__init__()
+        super(SmallFPSSAttention, self).__init__()
         
         self.encoder_blocks = nn.ModuleList()
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -100,11 +100,11 @@ class SimplifiedSpeckleSeparationModel(nn.Module):
             'noise_component': noise_component
         }
     
-def get_ssm_model_simple(checkpoint_path):
+def get_fpss_model_simple(checkpoint_path):
 
     print("Loading simplified SSM model...")
 
-    model = SimplifiedSpeckleSeparationModel()
+    model = SmallFPSSAttention()
 
     if checkpoint_path:
         checkpoint = torch.load(checkpoint_path, map_location='cpu')

@@ -2,27 +2,20 @@
 from IPython.display import clear_output
 import random
 import torch
-import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import torch
 
-from fpss.models import get_ssm_model_attention
-from fpss.models import get_ssm_model_simple
-from fpss.losses.ssm_loss import custom_loss
+from fpss.utils.model_utils import get_fpss_model
 
 import numpy as np
 from torch.utils.data import random_split
 
-from fpss.utils import paired_preprocessing, visualize_attention_maps, subset_blind_spot_masking
-from fpss.utils.config import get_config
+from fpss.utils import paired_octa_preprocessing_binary
 
-
-from fpss.utils import paired_octa_preprocessing, paired_octa_preprocessing_binary
-
-from fpss.models.unet.large_unet_old import LargeUNetAttention
+import os
 
 
 
@@ -353,7 +346,6 @@ def get_loaders(dataset, batch_size, val_split=0.2, device='cuda', seed=42):
     for patient in dataset:
         patient_data = dataset[patient]
         for input_img, target_img in patient_data:
-            # Convert to tensor and add channel dimension if needed
             if len(input_img.shape) == 2:
                 input_tensor = torch.from_numpy(input_img).float().unsqueeze(0)
                 target_tensor = torch.from_numpy(target_img).float().unsqueeze(0)
@@ -363,10 +355,6 @@ def get_loaders(dataset, batch_size, val_split=0.2, device='cuda', seed=42):
                 
             input_tensors.append(input_tensor)
             target_tensors.append(target_tensor)
-    
-    # Stack all tensors
-    #inputs = torch.stack(input_tensors).to(device)
-    #targets = torch.stack(target_tensors).to(device)
 
     inputs = torch.stack(input_tensors).permute(0, 3, 1, 2).to(device)
     targets = torch.stack(target_tensors).permute(0, 3, 1, 2).to(device)
@@ -397,7 +385,7 @@ def get_loaders(dataset, batch_size, val_split=0.2, device='cuda', seed=42):
     return train_loader, val_loader
 
 
-def train_speckle_separation_module(train_config, loss_fn, loss_name):
+def train_fpss(train_config, loss_fn, loss_name):
 
     device = train_config['device']
 
@@ -407,22 +395,13 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
 
     n_images_per_patient = train_config['n_images']
 
-    #dataset = paired_octa_preprocessing(start, n_patients, n_images_per_patient, n_neighbours = 10, threshold=65, sample=False, post_process_size=10)
     dataset = paired_octa_preprocessing_binary(start, n_patients, n_images_per_patient, n_neighbours = 4, threshold=99, sample=False, post_process_size=2)
-    #dataset = process_octa_segmentation_batch_patches(start, n_patients, n_images_per_patient, n_neighbours = 10, threshold=85, sample=False, post_process_size=10)
 
     print(f"Dataset size: {len(dataset)} patients")
 
     batch_size = train_config['batch_size']
     
-    #dataloader = get_loaders(dataset, batch_size, device)
     train_loader, val_loader = get_loaders(dataset, batch_size, val_split=0.2, device=device)
-    
-    history = {
-        'loss': [],
-        'flow_loss': [],
-        'noise_loss': []
-    }
 
     learning_rate = train_config['learning_rate']
     num_epochs = train_config['num_epochs']
@@ -431,67 +410,14 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
 
     base_checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
 
+    parent_dir = os.path.dirname(base_checkpoint_path)
+    if not os.path.exists(parent_dir):
+        os.makedirs(parent_dir)
+        print(f"Created directory: {parent_dir}")
+
     model_name = train_config['model_name']
 
-    if model_name == 'SSMSimple':
-        if train_config['load_model']:
-            checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
-            model = get_ssm_model_simple(checkpoint_path=checkpoint_path)
-            model.to(device)
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            best_loss = checkpoint['best_loss']
-            set_epoch = checkpoint['epoch']
-            history = checkpoint['history']
-            num_epochs = num_epochs + set_epoch
-            print(f"Model loaded from {checkpoint_path} at epoch {set_epoch} with loss {best_loss:.6f}")
-        else:
-            model = get_ssm_model_simple(checkpoint_path=None)
-            model.to(device)
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            best_loss = float('inf')
-            set_epoch = 0
-    
-    if model_name == 'SSMAttention':
-        if train_config['load_model']:
-            checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
-            model = get_ssm_model_attention(checkpoint_path=checkpoint_path)
-            model.to(device)
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            best_loss = checkpoint['best_loss']
-            set_epoch = checkpoint['epoch']
-            history = checkpoint['history']
-            num_epochs = num_epochs + set_epoch
-            print(f"Model loaded from {checkpoint_path} at epoch {set_epoch} with loss {best_loss:.6f}")
-        else:
-            model = get_ssm_model_attention(checkpoint_path=None)
-            model.to(device)
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            best_loss = float('inf')
-            set_epoch = 0
-
-    if model_name == 'UNet':
-        checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
-        print("Loading UNet model...")
-        if train_config['load_model']:
-            checkpoint = torch.load(checkpoint_path, map_location='cpu')
-            model = LargeUNetAttention(in_channels=1, out_channels=1).to(device)
-            model.load_state_dict(checkpoint['model_state_dict'])
-            model.to(device)
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-            best_loss = checkpoint['best_loss']
-            set_epoch = checkpoint['epoch']
-            history = checkpoint['history']
-            num_epochs = num_epochs + set_epoch
-            print(f"Model loaded from {checkpoint_path} at epoch {set_epoch} with loss {best_loss:.6f}")
-        else:
-            model = LargeUNetAttention()
-            model.to(device)
-            optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-            best_loss = float('inf')
-            set_epoch = 0
+    model, optimizer, best_loss, set_epoch, num_epochs, history = get_fpss_model(model_name, train_config, loss_name, num_epochs, learning_rate, optim, base_checkpoint_path)
     
     print(f"Model: {model_name}")
     checkpoint = {
@@ -503,7 +429,6 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
         }
 
     n2v_weight = train_config['n2v_weight']
-    #loss_fn = train_config['loss_fn']
     debug = train_config['debug']
     fast = train_config['fast']
     visualise = train_config['visualise']
@@ -513,42 +438,3 @@ def train_speckle_separation_module(train_config, loss_fn, loss_name):
           optimizer, set_epoch, num_epochs, 
           loss_fn, loss_parameters, debug, 
           n2v_weight, fast, visualise)
-    
-#############
-
-def train_ssm():
-
-
-    config_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\configs\ssm_config.yaml"
-
-    config = get_config(config_path)
-
-    loss_names = ['custom_loss', 'mse']
-    loss_name = 'custom_loss'  # 'mse' or 'custom_loss'
-
-    if loss_name == 'mse':
-        loss_fn = None
-    else:
-        loss_fn = custom_loss
-
-    train_speckle_separation_module(config['training'], loss_fn, loss_name)
-
-    #from ssm.models.ssm_attention import get_ssm_model
-    #from torchviz import make_dot
-    #import torch
-
-    #model = get_ssm_model(checkpoint=None)
-    #x = torch.randn(1, 1, 256, 256)  # Example input tensor
-    #outputs = model(x)  # Forward pass through the model
-
-    # Get both outputs
-    #flow_output = outputs['flow_component']
-    #noise_output = outputs['noise_component']
-
-    # Visualize both outputs together
-    #both_outputs = (flow_output, noise_output)
-    #graph = make_dot(both_outputs, params=dict(model.named_parameters()))
-    #graph.render("ssm_model", format="png")
-
-if __name__ == "__main__":
-    train_ssm()
