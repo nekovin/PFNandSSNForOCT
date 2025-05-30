@@ -106,8 +106,10 @@ def get_fpss_model_simple(checkpoint_path):
 
     model = SmallFPSSAttention()
 
+    checkpoint = None
+
     if checkpoint_path:
         checkpoint = torch.load(checkpoint_path, map_location='cpu')
         model.load_state_dict(checkpoint['model_state_dict'])
 
-    return model
+    return model, checkpoint

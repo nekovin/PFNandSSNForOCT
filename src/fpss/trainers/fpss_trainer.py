@@ -415,7 +415,7 @@ def train_fpss(train_config, loss_fn, loss_name):
         os.makedirs(parent_dir)
         print(f"Created directory: {parent_dir}")
 
-    model_name = train_config['model_name']
+    model_name = train_config['model']
 
     model, optimizer, best_loss, set_epoch, num_epochs, history = get_fpss_model(model_name, train_config, loss_name, num_epochs, learning_rate, optim, base_checkpoint_path)
     

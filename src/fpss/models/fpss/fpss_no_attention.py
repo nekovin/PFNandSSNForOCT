@@ -3,7 +3,7 @@ import torch.nn as nn
 from .components import ChannelAttention, SpatialAttention
 
 
-class FPSSAttention(nn.Module):
+class FPSSNoAttention(nn.Module):
     """
     Enhanced deeper U-Net architecture for OCT speckle separation with attention mechanisms
     """
@@ -17,12 +17,10 @@ class FPSSAttention(nn.Module):
             depth: Depth of the U-Net (number of downsampling/upsampling operations)
             block_depth: Number of convolution layers in each encoder/decoder block
         """
-        super(FPSSAttention, self).__init__()
+        super(FPSSNoAttention, self).__init__()
         
         self.encoder_blocks = nn.ModuleList()
-        self.encoder_attentions = nn.ModuleList()  # New attention modules for encoder
         self.decoder_blocks = nn.ModuleList()
-        self.decoder_attentions = nn.ModuleList()  # New attention modules for decoder
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.depth = depth
         self.input_channels = input_channels
@@ -48,13 +46,6 @@ class FPSSAttention(nn.Module):
             
             self.encoder_blocks.append(nn.Sequential(*encoder_block))
             
-            # Add attention modules after each encoder block
-            self.encoder_attentions.append(
-                nn.Sequential(
-                    ChannelAttention(out_channels),
-                    SpatialAttention()
-                )
-            )
             
             in_channels = out_channels
         
@@ -68,11 +59,6 @@ class FPSSAttention(nn.Module):
         
         self.bottleneck = nn.Sequential(*bottleneck)
         
-        # Bottleneck attention
-        self.bottleneck_attention = nn.Sequential(
-            ChannelAttention(bottleneck_channels),
-            SpatialAttention()
-        )
         
         # Decoder path with deeper blocks
         in_channels = bottleneck_channels
@@ -93,14 +79,6 @@ class FPSSAttention(nn.Module):
             
             self.decoder_blocks.append(nn.Sequential(*decoder_block))
             
-            # Add attention modules after each decoder block
-            self.decoder_attentions.append(
-                nn.Sequential(
-                    ChannelAttention(out_channels),
-                    SpatialAttention()
-                )
-            )
-            
             in_channels = out_channels
         
         # Add dilated convolutions for wider receptive field
@@ -114,14 +92,6 @@ class FPSSAttention(nn.Module):
             nn.Conv2d(feature_dim, feature_dim, kernel_size=3, padding=4, dilation=4),
             nn.BatchNorm2d(feature_dim),
             nn.ReLU(inplace=True)
-        )
-        
-        # Final attention after dilation
-        self.final_attention = nn.Sequential(
-            ChannelAttention(feature_dim),
-            nn.Dropout(0.2),  # Add dropout here
-            SpatialAttention(),
-            nn.Dropout(0.2)   # And here
         )
         
         # Output layers with residual connections
@@ -152,23 +122,19 @@ class FPSSAttention(nn.Module):
         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
 
     def __repr__(self):
-        return f"SpeckleSeparationUNetAttention(input_channels={self.input_channels}, feature_dim={self.feature_dim}, depth={self.depth}, block_depth={self.block_depth})"
+        return f"FPSSNoAttention(input_channels={self.input_channels}, feature_dim={self.feature_dim}, depth={self.depth}, block_depth={self.block_depth})"
 
     def forward(self, x):
 
         encoder_features = []
         
-        # Encoder path with attention
         for i in range(self.depth):
             x = self.encoder_blocks[i](x)
-            x = self.encoder_attentions[i](x) 
             encoder_features.append(x)
             if i < self.depth - 1:
                 x = self.pool(x)
-        
-        # Bottleneck with attention
+
         x = self.bottleneck(x)
-        x = self.bottleneck_attention(x)
         
         for i in range(self.depth):
             x = self.up(x)
@@ -177,13 +143,10 @@ class FPSSAttention(nn.Module):
                 x = nn.functional.interpolate(x, size=encoder_feature.size()[2:], mode='bilinear', align_corners=True)
             x = torch.cat([x, encoder_feature], dim=1)
             x = self.decoder_blocks[i](x)
-            x = self.decoder_attentions[i](x)  # Apply attention
         
         x = self.dilation_block(x)
-        x = self.final_attention(x) 
         
         flow_component = self.flow_branch(x)
-        #flow_component = torch.where(flow_component > 0.01, flow_component, torch.zeros_like(flow_component)) # binary
         noise_component = self.noise_branch(x)
 
         
@@ -192,9 +155,9 @@ class FPSSAttention(nn.Module):
             'noise_component': noise_component
         }
     
-def get_fpss_model_attention(checkpoint_path):
+def get_fpss_model_no_attention(checkpoint_path):
 
-    model = FPSSAttention()
+    model = FPSSNoAttention()
 
     checkpoint = None
     
