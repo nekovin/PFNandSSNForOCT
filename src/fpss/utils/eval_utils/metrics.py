@@ -7,6 +7,7 @@ import os
 import time
 import matplotlib.pyplot as plt
 from fpss.utils.data_utils.paired_preprocessing import paired_preprocessing
+from fpss.models import FPSSAttention
 
 def calculate_psnr(img1, img2, max_value=1.0):
 
@@ -284,12 +285,10 @@ def calculate_cnr_whole(image):
 
 def auto_select_roi_using_flow(img, device='cuda'):
 
-    from fpss.models import SpeckleSeparationUNetAttention
-
-    speckle_module = SpeckleSeparationUNetAttention(input_channels=1, feature_dim=32).to(device)
+    speckle_module = FPSSAttention(input_channels=1, feature_dim=32).to(device)
     try:
         print("Loading ssm model from checkpoint...")
-        ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\SSM_mse_best.pth"
+        ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\fpss\fpss_mse_best.pth"
         ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
         speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
         speckle_module.to(device)

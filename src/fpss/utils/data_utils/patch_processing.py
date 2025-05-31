@@ -297,3 +297,6 @@ def reconstruct_from_patches(patches, locations, image_shape, patch_size):
     
     else:
         raise ValueError(f"Unexpected location format: {sample_location}")
+
+def threshold_patches(patches, threshold=0.5):
+    return torch.where(patches < threshold, torch.zeros_like(patches), patches)

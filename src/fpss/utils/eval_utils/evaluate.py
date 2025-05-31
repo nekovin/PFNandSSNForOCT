@@ -61,7 +61,7 @@ def evaluate(image, reference, model, method):
         image_tensor = torch.from_numpy(image).float()
         if len(image_tensor.shape) == 2:
             image_tensor = image_tensor.unsqueeze(0).unsqueeze(0)
-        original_image = image  # Keep original for metrics
+        original_image = image 
     else:
         image_tensor = image
         try:
@@ -72,6 +72,8 @@ def evaluate(image, reference, model, method):
     denoised = denoise_image(model, image_tensor, device='cuda')
 
     denoised = denoised[-1]
+
+    denoised = normalize_image(denoised)
 
     print(f"Image shape: {image_tensor.shape}")
     print(f"Denoised shape: {denoised.shape}")

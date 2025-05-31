@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from ssm.evaluation import evaluate_baseline, evaluate_ssm_constraint, evaluate_progressssive_fusion_unet
+from fpss.evaluate.evaluate import evaluate_baseline, evaluate_ssm_constraint
 from fpss.utils import load_sdoct_dataset, display_metrics, display_grouped_metrics
 from tqdm import tqdm
 import torch
@@ -45,8 +45,7 @@ def normalise_sample(raw_image, reference):
 
         return raw_image, reference
 
-def 
-main(method=None, soct=True):
+def main(method=None, soct=True):
 
     config_path = os.getenv("N2_CONFIG_PATH")
 
@@ -96,11 +95,6 @@ main(method=None, soct=True):
         # Add batch dimension
         raw_image = raw_image.unsqueeze(0).to(device)  # Shape: (1, channels, height, width)
         reference = reference.unsqueeze(0).to(device)
-
-
-    
-    
-    
     
 
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
@@ -126,7 +120,7 @@ main(method=None, soct=True):
         n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config)
         metrics[f'{method}'] = n2v_metrics
         all_metrics[f'{method}'] = n2v_metrics
-        ax[0][0].imshow(n2v_denoised, cmap="gray")
+        ax[0][0].imshow(n2v_denoised, cmap="gray", vmin=0, vmax=1)
         ax[0][0].set_title(f"{method} Denoised")
     except Exception as e:
         print(f"Error evaluating n2v: {e}")
@@ -137,7 +131,7 @@ main(method=None, soct=True):
         n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config)
         metrics[f'{method}_ssm'] = n2v_ssm_metrics
         all_metrics[f'{method}_ssm'] = n2v_ssm_metrics
-        ax[0][1].imshow(n2v_ssm_denoised, cmap="gray")
+        ax[0][1].imshow(n2v_ssm_denoised, cmap="gray", vmin=0, vmax=1)
         ax[0][1].set_title(f"{method} SSM Denoised")
     except Exception as e:
         print(f"Error evaluating n2v ssm: {e}")
@@ -149,7 +143,7 @@ main(method=None, soct=True):
         n2v_metrics_last, n2v_denoised_last = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, last=True)
         metrics_last[f'{method}'] = n2v_metrics_last
         all_metrics[f'{method}_last'] = n2v_metrics_last
-        ax[1][0].imshow(n2v_denoised_last, cmap="gray")
+        ax[1][0].imshow(n2v_denoised_last, cmap="gray", vmin=0, vmax=1)
         ax[1][0].set_title(f"{method} Denoised Last")
     except Exception as e:
         print(f"Error evaluating n2v last: {e}")
@@ -160,7 +154,7 @@ main(method=None, soct=True):
         n2v_ssm_metrics_last, n2v_ssm_denoised_last = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, last=True)
         metrics_last[f'{method}_ssm'] = n2v_ssm_metrics_last
         all_metrics[f'{method}_ssm_last'] = n2v_ssm_metrics_last
-        ax[1][1].imshow(n2v_ssm_denoised_last, cmap="gray")
+        ax[1][1].imshow(n2v_ssm_denoised_last, cmap="gray", vmin=0, vmax=1)
         ax[1][1].set_title(f"{method} SSM Denoised Last")
     except Exception as e:
         print(f"Error evaluating n2v ssm last: {e}")
@@ -172,7 +166,7 @@ main(method=None, soct=True):
         n2v_metrics_best, n2v_denoised_best = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, best=True)
         metrics_best[f'{method}'] = n2v_metrics_best
         all_metrics[f'{method}_best'] = n2v_metrics_best
-        ax[2][0].imshow(n2v_denoised_best, cmap="gray")
+        ax[2][0].imshow(n2v_denoised_best, cmap="gray", vmin=0, vmax=1)
         ax[2][0].set_title(f"{method} Denoised Best")
     except Exception as e:
         print(f"Error evaluating n2v best: {e}")
@@ -183,7 +177,7 @@ main(method=None, soct=True):
         n2v_ssm_metrics_best, n2v_ssm_denoised_best = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, best=True)
         metrics_best[f'{method}_ssm'] = n2v_ssm_metrics_best
         all_metrics[f'{method}_ssm_best'] = n2v_ssm_metrics_best
-        ax[2][1].imshow(n2v_ssm_denoised_best, cmap="gray")
+        ax[2][1].imshow(n2v_ssm_denoised_best, cmap="gray", vmin=0, vmax=1)
         ax[2][1].set_title(f"{method} SSM Denoised Best")
     except Exception as e:
         print(f"Error evaluating n2v ssm best: {e}")
@@ -213,9 +207,9 @@ main(method=None, soct=True):
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     for a in ax:
         a.axis('off')
-    ax[0].imshow(n2v_denoised, cmap='gray')
+    ax[0].imshow(n2v_denoised, cmap='gray', vmin=0, vmax=1)
     ax[0].set_title(f"{method} Denoised")
-    ax[1].imshow(n2v_ssm_denoised, cmap='gray')
+    ax[1].imshow(n2v_ssm_denoised, cmap='gray', vmin=0, vmax=1)
     ax[1].set_title(f"{method} SSM Denoised")
     plt.tight_layout()
     plt.show()
@@ -254,12 +248,12 @@ main(method=None, soct=True):
                 patch2 = img2[y_start:y_end, x_start:x_end]
                 
                 # Plot patch from image 1
-                axes[i][j*2].imshow(patch1, cmap='gray')
+                axes[i][j*2].imshow(patch1, cmap='gray', vmin=0, vmax=1)
                 axes[i][j*2].set_title(f'Img1 P{i}{j}')
                 axes[i][j*2].axis('off')
                 
                 # Plot patch from image 2
-                axes[i][j*2+1].imshow(patch2, cmap='gray')
+                axes[i][j*2+1].imshow(patch2, cmap='gray', vmin=0, vmax=1)
                 axes[i][j*2+1].set_title(f'Img2 P{i}{j}')
                 axes[i][j*2+1].axis('off')
         

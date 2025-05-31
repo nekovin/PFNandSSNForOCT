@@ -156,6 +156,7 @@ def train(config, method, ssm):
             speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
             speckle_module.to(device)
             alpha = config['speckle_module']['alpha']
+            print("FPSS model loaded successfully")
         except Exception as e:
             print(f"Error loading model: {e}")
             print("Starting training from scratch.")

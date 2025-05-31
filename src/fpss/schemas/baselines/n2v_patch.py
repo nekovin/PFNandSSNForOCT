@@ -6,7 +6,7 @@ from fpss.utils.eval_utils.visualise import plot_images
 from fpss.utils import evaluate_oct_denoising
 import torch.nn.functional as F
 
-from fpss.utils.data_utils.patch_processing import extract_patches, reconstruct_from_patches
+from fpss.utils.data_utils.patch_processing import extract_patches, reconstruct_from_patches, threshold_patches
 
 def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
@@ -568,6 +568,8 @@ def process_batch_n2v_patch(
         model.train()
     else:
         model.eval()
+
+    threshold = 0.5
     
     total_loss = 0.0
          # Choose appropriate stride
@@ -609,30 +611,26 @@ def process_batch_n2v_patch(
                     flow_inputs = speckle_module(raw1_sub_batch)
                     flow_inputs = flow_inputs['flow_component'].detach()
                     flow_inputs = normalize_image_torch(flow_inputs)
+                    
                     outputs1 = model(blind1)
                     all_output1_patches.append(outputs1.detach())
                     
                     flow_outputs = speckle_module(outputs1)
                     flow_outputs = flow_outputs['flow_component'].detach()
                     flow_outputs = normalize_image_torch(flow_outputs)
-                    flow_loss1 = torch.mean(torch.abs(flow_outputs - flow_inputs))
 
-                    #flow_inputs = speckle_module(raw2_sub_batch)
-                    #flow_inputs = flow_inputs['flow_component'].detach()
-                    #flow_inputs = normalize_image_torch(flow_inputs)
+                    flow_inputs = threshold_patches(flow_inputs, threshold=threshold)
+                    flow_outputs = threshold_patches(flow_outputs, threshold=threshold)
 
-                    #outputs2 = model(blind2)
-                    #all_output2_patches.append(outputs2.detach())
-                    #flow_outputs = speckle_module(outputs2)
-                    #flow_outputs = flow_outputs['flow_component'].detach()
-                    #flow_outputs = normalize_image_torch(flow_outputs)
-                    #flow_loss2 = torch.mean(torch.abs(flow_outputs - flow_inputs))
-                    
+                    flow_loss1 = torch.mean(torch.abs(flow_inputs - flow_outputs))
+
                     n2v_loss1 = criterion(outputs1[mask > 0], raw1_sub_batch[mask > 0])
-                    #n2v_loss2 = criterion(outputs2[mask > 0], raw2_sub_batch[mask > 0])
 
-                    sub_loss = n2v_loss1 + flow_loss1 * alpha
-                    #sub_loss = (n2v_loss1 + n2v_loss2 + flow_loss1 * alpha + flow_loss2 * alpha) / ((len(raw1_patches) + sub_batch_size - 1) // sub_batch_size)
+
+                    alpha_adaptive = n2v_loss1.detach() / (flow_loss1.detach() + 1e-8)
+                    sub_loss = n2v_loss1 + flow_loss1 * alpha_adaptive
+
+                    #sub_loss = n2v_loss1 + flow_loss1 * alpha
 
                 else:
                     outputs1 = model(blind1)
@@ -671,6 +669,9 @@ def process_batch_n2v_patch(
                     # Create flow components for visualization
                     flow_inputs_full = speckle_module(raw1)['flow_component'].detach()
                     flow_outputs_full = speckle_module(reconstructed_outputs1)['flow_component'].detach()
+
+                    flow_inputs_full = threshold_patches(flow_inputs_full, threshold=threshold)
+                    flow_outputs_full = threshold_patches(flow_outputs_full, threshold=threshold)
                     
                     titles = ['Input Image', 'Flow Input', 'Flow Output', 'Blind Spot Input', 'Output Image', 'Sample Input', 'Sample Output']
                     images = [

@@ -362,7 +362,7 @@ def plot_images(images, titles, losses):
     combined_title = " | ".join(loss_titles)
     fig.suptitle(combined_title, fontsize=16)
     for i, img in enumerate(images):
-        axes[i].imshow(img, cmap='gray')
+        axes[i].imshow(img, cmap='gray', vmin=0, vmax=1)
         axes[i].set_title(titles[i])
         axes[i].axis('off')
     plt.tight_layout()
