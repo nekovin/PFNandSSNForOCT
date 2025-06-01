@@ -66,7 +66,7 @@ def get_fpss_model(model_name, train_config, loss_name, num_epochs, learning_rat
     elif model_name == 'FPSSNoAttention':
         if train_config['load_model']:
             checkpoint_path = train_config['best_checkpoint'].format(loss_fn=loss_name)
-            model, checkpoint = get_fpss_model_attention(checkpoint_path=checkpoint_path)
+            model, checkpoint = get_fpss_model_no_attention(checkpoint_path=checkpoint_path)
             model.to(device)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

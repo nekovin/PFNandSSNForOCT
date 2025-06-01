@@ -73,7 +73,7 @@ def evaluate(image, reference, model, method):
 
     denoised = denoised[-1]
 
-    denoised = normalize_image(denoised)
+    #denoised = normalize_image(denoised)
 
     print(f"Image shape: {image_tensor.shape}")
     print(f"Denoised shape: {denoised.shape}")

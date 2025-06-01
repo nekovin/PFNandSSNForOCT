@@ -88,7 +88,6 @@ def process_batch(
     mode = 'train' if model.training else 'val'
     
     epoch_loss = 0 
-
     metrics = None
     
     for batch_idx, (input_imgs, target_imgs) in enumerate(data_loader):
@@ -102,23 +101,28 @@ def process_batch(
         sub_batch_size = 16 
         total_loss = 0
         all_output_patches = []
+
+        if optimizer is not None and mode == 'train':
+            optimizer.zero_grad()
         
         for i in range(0, len(input_patches), sub_batch_size):
             input_sub_batch = input_patches[i:i+sub_batch_size]
             target_sub_batch = target_patches[i:i+sub_batch_size]
 
-                
             if speckle_module is not None:
-                flow_inputs = speckle_module(input_sub_batch)
-                flow_inputs = flow_inputs['flow_component'].detach()
-                flow_inputs = normalize_image_torch(flow_inputs)
+                # Only input flow computation should be no_grad
+                with torch.no_grad():
+                    flow_inputs = speckle_module(input_sub_batch)
+                    flow_inputs = flow_inputs['flow_component']
+                    flow_inputs = normalize_image_torch(flow_inputs)
                 
+                # Model inference and loss computation need gradients
                 outputs = model(input_sub_batch)
                 for j in range(outputs.size(0)):
                     all_output_patches.append(outputs[j].detach().clone())
                 
                 flow_outputs = speckle_module(outputs)
-                flow_outputs = flow_outputs['flow_component'].detach()
+                flow_outputs = flow_outputs['flow_component']
                 flow_outputs = normalize_image_torch(flow_outputs)
                 
                 flow_loss_abs = torch.mean(torch.abs(flow_outputs - flow_inputs))
@@ -130,13 +134,14 @@ def process_batch(
                     all_output_patches.append(outputs[j].detach().clone())
                 patch_loss = criterion(outputs, target_sub_batch)
             
-            total_loss += patch_loss.item() * len(input_sub_batch)
-            
-            if mode == 'train':
-                optimizer.zero_grad()
+            if optimizer is not None and mode == 'train':
                 patch_loss.backward()
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-                optimizer.step()
+            
+            total_loss += patch_loss.item() * len(input_sub_batch)
+
+        if optimizer is not None and mode == 'train':
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
         
         # Reconstruct full images from patches for visualization
         if visualise and batch_idx % 10 == 0:
@@ -191,7 +196,6 @@ def process_batch(
     if mode != 'train':
         scheduler.step(loss_value)
 
-    #return epoch_loss / len(data_loader)
     if metrics is not None:
         return epoch_loss / len(data_loader), metrics
     else:

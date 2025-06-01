@@ -2,6 +2,19 @@ import torch
 import torch.nn as nn
 from .components import ChannelAttention, SpatialAttention
 
+def normalize_image_torch(img):
+
+    # Get min and max values
+    min_val = torch.min(img)
+    max_val = torch.max(img)
+    
+    # Normalize to [0,1] range
+    if max_val > min_val:
+        normalized = (img - min_val) / (max_val - min_val)
+    else:
+        normalized = torch.zeros_like(img)
+    
+    return normalized
 
 class FPSSAttention(nn.Module):
     """
@@ -185,6 +198,8 @@ class FPSSAttention(nn.Module):
         flow_component = self.flow_branch(x)
         #flow_component = torch.where(flow_component > 0.01, flow_component, torch.zeros_like(flow_component)) # binary
         noise_component = self.noise_branch(x)
+
+        flow_component = normalize_image_torch(flow_component)
 
         
         return {

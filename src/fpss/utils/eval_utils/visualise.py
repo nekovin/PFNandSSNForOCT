@@ -43,11 +43,11 @@ def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch)
     
     # Row 1: Original data
     # 
-    axes[0, 0].imshow(input_np, cmap='gray')
+    axes[0, 0].imshow(input_np, cmap='gray', vmin=0, vmax=1)
     axes[0, 0].set_title("Input")
     axes[0, 0].axis('off')
     
-    axes[0, 1].imshow(target_np, cmap='gray')
+    axes[0, 1].imshow(target_np, cmap='gray', vmin=0, vmax=1)
     axes[0, 1].set_title("Target")
     axes[0, 1].axis('off')
     
@@ -55,11 +55,11 @@ def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch)
     #normalise
     #axes[1, 0].imshow(flow_np, cmap='gray')
     #
-    axes[1, 0].imshow(flow_np, cmap='gray')
+    axes[1, 0].imshow(flow_np, cmap='gray', vmin=0, vmax=1)
     axes[1, 0].set_title("Flow Component")
     axes[1, 0].axis('off')
     
-    axes[1, 1].imshow(noise_np, cmap='gray')
+    axes[1, 1].imshow(noise_np, cmap='gray', vmin=0, vmax=1)
     axes[1, 1].set_title("Noise Component")
     axes[1, 1].axis('off')
     
@@ -72,14 +72,14 @@ def visualize_progress(model, input_tensor, target_tensor, masked_tensor, epoch)
     #axes[1, 2].axis('off')
 
     if masked_tensor is not None:
-        axes[1, 2].imshow(masked_tensor, cmap='gray')
+        axes[1, 2].imshow(masked_tensor, cmap='gray', vmin=0, vmax=1)
         axes[1, 2].set_title("Masked Tensor")
     else:
         axes[1, 2].set_title("No Masked Tensor")
     axes[1, 2].axis('off')
 
     flow_np = normalize_image(flow_np)
-    axes[0, 2].imshow(flow_np, cmap='gray')
+    axes[0, 2].imshow(flow_np, cmap='gray', vmin=0, vmax=1)
     axes[0, 2].set_title("Flow Component (Normalized)")
     axes[0, 2].axis('off')
 

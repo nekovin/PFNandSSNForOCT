@@ -120,7 +120,7 @@ def main(method=None, soct=True):
         n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config)
         metrics[f'{method}'] = n2v_metrics
         all_metrics[f'{method}'] = n2v_metrics
-        ax[0][0].imshow(n2v_denoised, cmap="gray", vmin=0, vmax=1)
+        ax[0][0].imshow(n2v_denoised, cmap="gray")
         ax[0][0].set_title(f"{method} Denoised")
     except Exception as e:
         print(f"Error evaluating n2v: {e}")
@@ -131,7 +131,7 @@ def main(method=None, soct=True):
         n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config)
         metrics[f'{method}_ssm'] = n2v_ssm_metrics
         all_metrics[f'{method}_ssm'] = n2v_ssm_metrics
-        ax[0][1].imshow(n2v_ssm_denoised, cmap="gray", vmin=0, vmax=1)
+        ax[0][1].imshow(n2v_ssm_denoised, cmap="gray")
         ax[0][1].set_title(f"{method} SSM Denoised")
     except Exception as e:
         print(f"Error evaluating n2v ssm: {e}")
@@ -154,7 +154,7 @@ def main(method=None, soct=True):
         n2v_ssm_metrics_last, n2v_ssm_denoised_last = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, last=True)
         metrics_last[f'{method}_ssm'] = n2v_ssm_metrics_last
         all_metrics[f'{method}_ssm_last'] = n2v_ssm_metrics_last
-        ax[1][1].imshow(n2v_ssm_denoised_last, cmap="gray", vmin=0, vmax=1)
+        ax[1][1].imshow(n2v_ssm_denoised_last, cmap="gray")
         ax[1][1].set_title(f"{method} SSM Denoised Last")
     except Exception as e:
         print(f"Error evaluating n2v ssm last: {e}")
@@ -166,7 +166,7 @@ def main(method=None, soct=True):
         n2v_metrics_best, n2v_denoised_best = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, best=True)
         metrics_best[f'{method}'] = n2v_metrics_best
         all_metrics[f'{method}_best'] = n2v_metrics_best
-        ax[2][0].imshow(n2v_denoised_best, cmap="gray", vmin=0, vmax=1)
+        ax[2][0].imshow(n2v_denoised_best, cmap="gray")
         ax[2][0].set_title(f"{method} Denoised Best")
     except Exception as e:
         print(f"Error evaluating n2v best: {e}")
@@ -177,7 +177,7 @@ def main(method=None, soct=True):
         n2v_ssm_metrics_best, n2v_ssm_denoised_best = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, best=True)
         metrics_best[f'{method}_ssm'] = n2v_ssm_metrics_best
         all_metrics[f'{method}_ssm_best'] = n2v_ssm_metrics_best
-        ax[2][1].imshow(n2v_ssm_denoised_best, cmap="gray", vmin=0, vmax=1)
+        ax[2][1].imshow(n2v_ssm_denoised_best, cmap="gray")
         ax[2][1].set_title(f"{method} SSM Denoised Best")
     except Exception as e:
         print(f"Error evaluating n2v ssm best: {e}")
@@ -207,9 +207,9 @@ def main(method=None, soct=True):
     fig, ax = plt.subplots(1, 2, figsize=(15, 5))
     for a in ax:
         a.axis('off')
-    ax[0].imshow(n2v_denoised, cmap='gray', vmin=0, vmax=1)
+    ax[0].imshow(n2v_denoised, cmap='gray')
     ax[0].set_title(f"{method} Denoised")
-    ax[1].imshow(n2v_ssm_denoised, cmap='gray', vmin=0, vmax=1)
+    ax[1].imshow(n2v_ssm_denoised, cmap='gray')
     ax[1].set_title(f"{method} SSM Denoised")
     plt.tight_layout()
     plt.show()
@@ -248,12 +248,12 @@ def main(method=None, soct=True):
                 patch2 = img2[y_start:y_end, x_start:x_end]
                 
                 # Plot patch from image 1
-                axes[i][j*2].imshow(patch1, cmap='gray', vmin=0, vmax=1)
+                axes[i][j*2].imshow(patch1, cmap='gray')
                 axes[i][j*2].set_title(f'Img1 P{i}{j}')
                 axes[i][j*2].axis('off')
                 
                 # Plot patch from image 2
-                axes[i][j*2+1].imshow(patch2, cmap='gray', vmin=0, vmax=1)
+                axes[i][j*2+1].imshow(patch2, cmap='gray')
                 axes[i][j*2+1].set_title(f'Img2 P{i}{j}')
                 axes[i][j*2+1].axis('off')
         
@@ -263,7 +263,45 @@ def main(method=None, soct=True):
     # Usage example:
     compare_image_patches(raw_image[0][0].cpu().numpy(), n2v_denoised)
     compare_image_patches(raw_image[0][0].cpu().numpy(), n2v_ssm_denoised)
+
+    def export_results_to_overleaf_table(metrics1, metrics2):
+        table = "\\begin{table}[htbp]\n\\centering\n\\begin{tabular}{|c|c|c|}\n\\hline\n"
+        table += f"Metric & {str(method).upper()} & {str(method).upper()}-FPSS \\\\\n\\hline\n"
         
+        for m in zip(metrics1.keys(), metrics2.keys()):
+
+            # if metric not a number, skip
+            
+            metric_name = m[0]
+            if metric_name not in ['psnr', 'ssim', 'snr', 'cnr', 'enl', 'epi']:
+                continue
+            metric1 = float(metrics1[metric_name])
+            metric2 = float(metrics2[metric_name])
+            #metric_values = f"{metric1:.4f} & {metric2:.4f}"
+            if metric1 > metric2:
+                metric_values = f"\\textbf{{{metric1:.4f}}} & {metric2:.4f}"
+            else:
+                metric_values = f"{metric1:.4f} & \\textbf{{{metric2:.4f}}}"
+            
+            # Add to table
+            table += f"{str(metric_name).upper()} & {metric_values} \\\\\n"
+
+        #table += f"{metric_name} & {metric_values} & {metric_values} \\\\\n"
+        
+        table += "\\hline\n\\end{tabular}\n\\caption{Comparison of "
+        #{method} and {method}}-FPSS Performance Metrics}\n\\end{table}"
+        table += f"{method} and {method}-FPSS Performance Metrics"
+        table += "}\n\\end{table}"
+
+        table += "\n\label{tab:"
+        table += f"{method}_comparison"
+        table += "}\n"
+        print(table)
+    
+    print(metrics)
+    export_results_to_overleaf_table(metrics[method], metrics[f'{method}_ssm'])
+    
+    return metrics
 
 if __name__ == "__main__":
     main()

@@ -572,7 +572,6 @@ def process_batch_n2v_patch(
     threshold = 0.5
     
     total_loss = 0.0
-         # Choose appropriate stride
 
     metrics = None
     
