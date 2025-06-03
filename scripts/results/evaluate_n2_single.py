@@ -7,6 +7,7 @@ import os
 import random
 from fpss.utils.config import get_config
 from fpss.data import get_paired_loaders
+from fpss.evaluate.evaluate import load_model
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -71,7 +72,7 @@ def main(method=None, soct=True):
 
         # random sample
         #sample = random.choice(list(dataset.keys()))
-        sample = '1'
+        sample = '13'
         raw_image = dataset[sample]["raw"][0][0]
         reference = dataset[sample]["avg"][0][0]
         raw_image, reference = normalise_sample(raw_image, reference)
@@ -97,120 +98,82 @@ def main(method=None, soct=True):
         reference = reference.unsqueeze(0).to(device)
     
 
-    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    fig, ax = plt.subplots(1, 2, figsize=(15, 10))
     for a in ax:
         a.axis('off')
     ax[0].imshow(raw_image.cpu().numpy()[0][0], cmap="gray")
-    ax[0].set_title("Raw Image")
     ax[1].imshow(reference.cpu().numpy()[0][0], cmap="gray")
-    ax[1].set_title("Reference Image")
     plt.tight_layout()
     plt.show()
 
+    # save figure
+    fig.savefig(f"../../results/raw_reference.png")
 
-    fig, ax = plt.subplots(3, 2, figsize=(15, 15))
+
+    fig, ax = plt.subplots(1, 2, figsize=(15, 15))
 
     metrics = {}
     metrics_last = {}
     metrics_best = {}
     all_metrics = {}
 
+    config = get_config(config_path, override_config)
+    
+    config['training']['method'] = method
+    
+    verbose = config['training']['verbose']
+
+    base_model, checkpoint = load_model(config, verbose, last=False, best=False)
+
+    config['speckle_module']['use'] = True
+    fpss_model, checkpoint = load_model(config, verbose, last=False, best=False)
+
+
     # Best checkpoints
-    try:    
-        n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config)
+    try:
+        n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, base_model)
         metrics[f'{method}'] = n2v_metrics
         all_metrics[f'{method}'] = n2v_metrics
-        ax[0][0].imshow(n2v_denoised, cmap="gray")
-        ax[0][0].set_title(f"{method} Denoised")
+        ax[0].imshow(n2v_denoised, cmap="gray")
     except Exception as e:
         print(f"Error evaluating n2v: {e}")
         n2v_metrics = None
         n2v_denoised = None
 
     try:
-        n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config)
+        
+        n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, fpss_model)
         metrics[f'{method}_ssm'] = n2v_ssm_metrics
         all_metrics[f'{method}_ssm'] = n2v_ssm_metrics
-        ax[0][1].imshow(n2v_ssm_denoised, cmap="gray")
-        ax[0][1].set_title(f"{method} SSM Denoised")
+        ax[1].imshow(n2v_ssm_denoised, cmap="gray")
     except Exception as e:
         print(f"Error evaluating n2v ssm: {e}")
         n2v_ssm_metrics = None
         n2v_ssm_denoised = None
 
-    # Last checkpoints
-    try:
-        n2v_metrics_last, n2v_denoised_last = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, last=True)
-        metrics_last[f'{method}'] = n2v_metrics_last
-        all_metrics[f'{method}_last'] = n2v_metrics_last
-        ax[1][0].imshow(n2v_denoised_last, cmap="gray", vmin=0, vmax=1)
-        ax[1][0].set_title(f"{method} Denoised Last")
-    except Exception as e:
-        print(f"Error evaluating n2v last: {e}")
-        n2v_metrics_last = None
-        n2v_denoised_last = None
-
-    try:
-        n2v_ssm_metrics_last, n2v_ssm_denoised_last = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, last=True)
-        metrics_last[f'{method}_ssm'] = n2v_ssm_metrics_last
-        all_metrics[f'{method}_ssm_last'] = n2v_ssm_metrics_last
-        ax[1][1].imshow(n2v_ssm_denoised_last, cmap="gray")
-        ax[1][1].set_title(f"{method} SSM Denoised Last")
-    except Exception as e:
-        print(f"Error evaluating n2v ssm last: {e}")
-        n2v_ssm_metrics_last = None
-        n2v_ssm_denoised_last = None
-
-    # Best metrics checkpoints
-    try:
-        n2v_metrics_best, n2v_denoised_best = evaluate_baseline(raw_image, reference, method, config_path, override_config=override_config, best=True)
-        metrics_best[f'{method}'] = n2v_metrics_best
-        all_metrics[f'{method}_best'] = n2v_metrics_best
-        ax[2][0].imshow(n2v_denoised_best, cmap="gray")
-        ax[2][0].set_title(f"{method} Denoised Best")
-    except Exception as e:
-        print(f"Error evaluating n2v best: {e}")
-        n2v_metrics_best = None
-        n2v_denoised_best = None
-
-    try:
-        n2v_ssm_metrics_best, n2v_ssm_denoised_best = evaluate_ssm_constraint(raw_image, reference, method, config_path, override_config=override_config, best=True)
-        metrics_best[f'{method}_ssm'] = n2v_ssm_metrics_best
-        all_metrics[f'{method}_ssm_best'] = n2v_ssm_metrics_best
-        ax[2][1].imshow(n2v_ssm_denoised_best, cmap="gray")
-        ax[2][1].set_title(f"{method} SSM Denoised Best")
-    except Exception as e:
-        print(f"Error evaluating n2v ssm best: {e}")
-        n2v_ssm_metrics_best = None
-        n2v_ssm_denoised_best = None
-
     display_metrics(metrics)
-    display_metrics(metrics_last)
-    display_metrics(metrics_best)
 
     fig.tight_layout()
     plt.show()
 
+    #plt.savefig(f"../../results/{method}.png")\
+    fig.savefig(f"../../results/{method}.png")
+
     from fpss.utils import auto_select_roi_using_flow
 
     masks = auto_select_roi_using_flow(raw_image[0][0].cpu().numpy(), device)
-    mask_fig, ax_mask = plt.subplots(1, 3, figsize=(15, 5))
+    mask_fig, ax_mask = plt.subplots(1, 3, figsize=(15, 10))
     ax_mask[0].imshow(raw_image[0][0].cpu().numpy(), cmap='gray')
-    ax_mask[0].set_title('Original Image')
     ax_mask[1].imshow(masks[0], cmap='gray')
-    ax_mask[1].set_title('Foreground Mask')
     ax_mask[2].imshow(masks[1], cmap='gray')
-    ax_mask[2].set_title('Background Mask')
     plt.tight_layout()
     plt.show()
 
-    fig, ax = plt.subplots(1, 2, figsize=(15, 5))
+    fig, ax = plt.subplots(1, 2, figsize=(15, 10))
     for a in ax:
         a.axis('off')
     ax[0].imshow(n2v_denoised, cmap='gray')
-    ax[0].set_title(f"{method} Denoised")
     ax[1].imshow(n2v_ssm_denoised, cmap='gray')
-    ax[1].set_title(f"{method} SSM Denoised")
     plt.tight_layout()
     plt.show()
 

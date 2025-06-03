@@ -128,40 +128,18 @@ def load_checkpoint(config, last=False, best=False):
     
     return checkpoint
 
-def evaluate_baseline(image, reference, method, config_path = None, override_config = None, last=False, best=False):
-    
-    config = get_config(config_path, override_config)
-    
-    config['training']['method'] = method
-    
-    verbose = config['training']['verbose']
-
-    model, checkpoint = load_model(config, verbose, last=last, best=best)
-    #checkpoint = load_checkpoint(config, last=last)
+def evaluate_baseline(image, reference, method, model):
     
     metrics, denoised = evaluate(image, reference, model, method)
 
-    metrics['epochs'] = checkpoint['epoch']
-    metrics['loss'] = checkpoint['best_val_loss']
     metrics['model'] = str(model)
 
     return metrics, denoised
 
-def evaluate_ssm_constraint(image, reference, method, config_path, override_config = None, last=False, best=False):
-    
-    config = get_config(config_path, override_config)
-    
-    config['speckle_module']['use'] = True
-    config['training']['method'] = method
-    verbose = config['training']['verbose']
-
-    model, checkpoint = load_model(config, verbose, last=last, best=best)
-    #checkpoint = load_checkpoint(config)
+def evaluate_ssm_constraint(image, reference, method, model):
 
     metrics, denoised = evaluate(image, reference, model, method)
 
-    metrics['epochs'] = checkpoint['epoch']
-    metrics['loss'] = checkpoint['best_val_loss']
     metrics['model'] = str(model)
 
     return metrics, denoised
