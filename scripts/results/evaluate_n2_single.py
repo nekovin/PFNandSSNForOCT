@@ -126,7 +126,7 @@ def main(method=None, soct=True):
     base_model, checkpoint = load_model(config, verbose, last=False, best=False)
 
     config['speckle_module']['use'] = True
-    fpss_model, checkpoint = load_model(config, verbose, last=False, best=False)
+    fpss_model, fpss_checkpoint = load_model(config, verbose, last=False, best=False)
 
 
     # Best checkpoints
@@ -134,6 +134,7 @@ def main(method=None, soct=True):
         n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, base_model)
         metrics[f'{method}'] = n2v_metrics
         all_metrics[f'{method}'] = n2v_metrics
+        print(f"Base: {checkpoint['epoch']}")
         ax[0].imshow(n2v_denoised, cmap="gray")
     except Exception as e:
         print(f"Error evaluating n2v: {e}")
@@ -145,6 +146,7 @@ def main(method=None, soct=True):
         n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, fpss_model)
         metrics[f'{method}_ssm'] = n2v_ssm_metrics
         all_metrics[f'{method}_ssm'] = n2v_ssm_metrics
+        print(f"FPSS: {fpss_checkpoint['epoch']}")
         ax[1].imshow(n2v_ssm_denoised, cmap="gray")
     except Exception as e:
         print(f"Error evaluating n2v ssm: {e}")

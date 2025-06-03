@@ -77,7 +77,7 @@ def train_n2v(model, train_loader, val_loader, optimizer, criterion, starting_ep
 def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
           speckle_module=None, alpha=1, save=False, method='n2v', octa_criterion=None, threshold=0.0, mask_ratio=0.1, best_metrics_score=float('-inf'),
-          scheduler=None, train_config=None, sample=None, patch_size=64, stride=32, patience_count=10):
+          scheduler=None, train_config=None, sample=None, patch_size=64, stride=32, patience_count=10, adaptive_loss=False):
     """
     Train function that handles both Noise2Void and Noise2Self approaches.
     
@@ -109,7 +109,8 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
             scheduler=scheduler,
             sample=sample,
             patch_size = patch_size,
-            stride = stride)
+            stride = stride,
+            adaptive_loss=adaptive_loss)
         
         model.eval()
         with torch.no_grad():
@@ -122,7 +123,8 @@ def train_n2v_patch(model, train_loader, val_loader, optimizer, criterion, start
                 scheduler=scheduler,
                 sample=sample,
                 patch_size = patch_size,
-                stride = stride)
+                stride = stride,
+                adaptive_loss=adaptive_loss)
             
             val_metrics_score = (
                 val_metrics.get('snr', 0) * 0.3 + 

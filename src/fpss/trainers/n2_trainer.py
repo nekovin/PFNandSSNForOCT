@@ -131,6 +131,9 @@ def train(config, method, ssm):
 
     save = train_config['save']
 
+    # Ablations
+    adaptive_loss = train_config['adaptive_loss']
+
     # save config as text
     config_checkpoint_path = baselines_checkpoint_path + '/config_text/'
     print("Config checkpoint path: ", config_checkpoint_path)
@@ -210,7 +213,8 @@ def train(config, method, ssm):
                     train_config=train_config,
                     sample=raw_image,
                     patch_size=train_config['patch_size'],
-                    stride=train_config['stride'])
+                    stride=train_config['stride'],
+                    adaptive_loss=adaptive_loss,)
             else:
                 model = train_n2n(
                     model,
@@ -266,6 +270,7 @@ def train(config, method, ssm):
                     patch_size=train_config['patch_size'], 
                     stride=train_config['stride'],
                     patience_count=train_config['patience'],
+                    adaptive_loss=adaptive_loss
                     )
             else:
                 model = train_n2v(

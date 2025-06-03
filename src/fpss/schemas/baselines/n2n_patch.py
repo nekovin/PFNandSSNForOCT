@@ -84,7 +84,8 @@ def threshold_flow_component(t_img: torch.Tensor, threshold: float = 0.01, botto
 
 def process_batch(
         data_loader, model, criterion, optimizer, epoch, 
-        epochs, device, visualise, speckle_module, alpha, scheduler, sample, patch_size, stride):
+        epochs, device, visualise, speckle_module, alpha, 
+        scheduler, sample, patch_size, stride, adaptive_loss):
     mode = 'train' if model.training else 'val'
     
     epoch_loss = 0 
@@ -204,7 +205,7 @@ def process_batch(
 def train_n2n_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, 
               batch_size, lr, best_val_loss, checkpoint_path = None,device='cuda', visualise=False, 
               speckle_module=None, alpha=1, save=False, scheduler=None, best_metrics_score=None, train_config=None,
-              sample=None, patch_size=128, stride=48):
+              sample=None, patch_size=128, stride=48, adaptive_loss=False):
 
     last_checkpoint_path = checkpoint_path + f'_patched_last_checkpoint.pth'
     best_checkpoint_path = checkpoint_path + f'_patched_best_checkpoint.pth'
@@ -219,7 +220,7 @@ def train_n2n_patch(model, train_loader, val_loader, optimizer, criterion, start
         train_loss = process_batch(
             train_loader, model, criterion, optimizer, epoch, 
             starting_epoch+epochs, device, visualise, speckle_module, alpha, 
-            scheduler, sample, patch_size, stride)
+            scheduler, sample, patch_size, stride, adaptive_loss)
 
         model.eval()
         visualise = True
@@ -227,7 +228,7 @@ def train_n2n_patch(model, train_loader, val_loader, optimizer, criterion, start
             val_loss, val_metrics = process_batch(
                 val_loader, model, criterion, optimizer, epoch, starting_epoch+epochs, 
                 device, visualise, speckle_module, alpha, scheduler, sample,
-                patch_size, stride)
+                patch_size, stride, adaptive_loss)
             
             val_metrics_score = (
                 val_metrics.get('snr', 0) * 0.3 + 
