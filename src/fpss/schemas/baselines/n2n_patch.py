@@ -126,9 +126,19 @@ def process_batch(
                 flow_outputs = flow_outputs['flow_component']
                 flow_outputs = normalize_image_torch(flow_outputs)
                 
-                flow_loss_abs = torch.mean(torch.abs(flow_outputs - flow_inputs))
-                flow_loss_mse = F.mse_loss(flow_outputs, flow_inputs) 
-                patch_loss = criterion(outputs, target_sub_batch) + flow_loss_abs * alpha + flow_loss_mse * alpha
+                #flow_loss_abs = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                #flow_loss_mse = F.mse_loss(flow_outputs, flow_inputs) 
+                flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
+                #patch_loss = criterion(outputs, target_sub_batch) + flow_loss_abs * alpha + flow_loss_mse * alpha
+
+                if adaptive_loss:
+                    n2s_loss = criterion(outputs, target_sub_batch)
+                    alpha_adaptive = n2s_loss.detach() / (flow_loss.detach() + 1e-8)
+                    #sub_loss = n2s_loss + flow_loss * alpha_adaptive
+                    patch_loss = n2s_loss + flow_loss * alpha_adaptive
+                else:
+                    patch_loss = criterion(outputs, target_sub_batch) + flow_loss * alpha
+
             else:
                 outputs = model(input_sub_batch)
                 for j in range(outputs.size(0)):
@@ -169,7 +179,7 @@ def process_batch(
                     sample_output[0][0]
                 ]
                 losses = {
-                    'Flow Loss': flow_loss_abs.item(),
+                    'Flow Loss': flow_loss.item(),
                     'Total Loss': total_loss / len(input_patches)
                 }
             else:

@@ -563,7 +563,8 @@ def process_batch_n2v_patch(
         scheduler=None,
         sample=None,
         patch_size = 64,  # Choose appropriate patch size
-        stride = 32 
+        stride = 32 ,
+        adaptive_loss=False
         ):
     
     if optimizer: 
@@ -627,11 +628,12 @@ def process_batch_n2v_patch(
 
                     n2v_loss1 = criterion(outputs1[mask > 0], raw1_sub_batch[mask > 0])
 
+                    if adaptive_loss:
 
-                    alpha_adaptive = n2v_loss1.detach() / (flow_loss1.detach() + 1e-8)
-                    sub_loss = n2v_loss1 + flow_loss1 * alpha_adaptive
-
-                    #sub_loss = n2v_loss1 + flow_loss1 * alpha
+                        alpha_adaptive = n2v_loss1.detach() / (flow_loss1.detach() + 1e-8)
+                        sub_loss = n2v_loss1 + flow_loss1 * alpha_adaptive
+                    else:
+                        sub_loss = n2v_loss1 + flow_loss1 * alpha
 
                 else:
                     outputs1 = model(blind1)

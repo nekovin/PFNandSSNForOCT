@@ -27,7 +27,7 @@ def get_fpss_model(model_name, train_config, loss_name, num_epochs, learning_rat
 
     if model_name == 'SSMSimple':
         if train_config['load_model']:
-            checkpoint_path = train_config['best_checkpoint'].format(loss_fn=loss_name)
+            checkpoint_path = train_config['best_checkpoint'].format(model_name=model_name, loss_fn=loss_name)
             model, checkpoint = get_fpss_model_simple(checkpoint_path=checkpoint_path)
             model.to(device)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -46,7 +46,7 @@ def get_fpss_model(model_name, train_config, loss_name, num_epochs, learning_rat
     
     elif model_name == 'SSMAttention':
         if train_config['load_model']:
-            checkpoint_path = train_config['best_checkpoint'].format(loss_fn=loss_name)
+            checkpoint_path = train_config['best_checkpoint'].format(model_name=model_name, loss_fn=loss_name)
             model, checkpoint = get_fpss_model_attention(checkpoint_path=checkpoint_path)
             model.to(device)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -65,7 +65,7 @@ def get_fpss_model(model_name, train_config, loss_name, num_epochs, learning_rat
     
     elif model_name == 'FPSSNoAttention':
         if train_config['load_model']:
-            checkpoint_path = train_config['best_checkpoint'].format(loss_fn=loss_name)
+            checkpoint_path = train_config['best_checkpoint'].format(model_name=model_name, loss_fn=loss_name)
             model, checkpoint = get_fpss_model_no_attention(checkpoint_path=checkpoint_path)
             model.to(device)
             optimizer = optim.Adam(model.parameters(), lr=learning_rate)

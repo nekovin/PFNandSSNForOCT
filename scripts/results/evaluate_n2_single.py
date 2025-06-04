@@ -8,6 +8,8 @@ import random
 from fpss.utils.config import get_config
 from fpss.data import get_paired_loaders
 from fpss.evaluate.evaluate import load_model
+from fpss.models.fpss.fpss_attention import FPSSAttention
+from scipy.io import loadmat
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -127,6 +129,28 @@ def main(method=None, soct=True):
 
     config['speckle_module']['use'] = True
     fpss_model, fpss_checkpoint = load_model(config, verbose, last=False, best=False)
+
+    speckle_module = FPSSAttention(input_channels=1, feature_dim=32).to(device)
+    try:
+        print("Loading ssm model from checkpoint...")
+        ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\fpss\fpss_mse_best.pth"#config['ssm_checkpoint_path']
+        ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
+        speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
+        speckle_module.to(device)
+        alpha = config['speckle_module']['alpha']
+        print("FPSS model loaded successfully")
+    except Exception as e:
+        print(f"Error loading model: {e}")
+        print("Starting training from scratch.")
+        raise e 
+    
+    speckle_module.eval()
+    speckle_output = speckle_module(raw_image)['flow_component']
+    speckle_output = speckle_output.detach().cpu()
+    print(speckle_output)
+    plt.figure(figsize=(10, 5))
+    plt.imshow(speckle_output.cpu().numpy()[0][0], cmap='gray')
+    plt.show()
 
 
     # Best checkpoints

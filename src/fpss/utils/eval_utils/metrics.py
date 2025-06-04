@@ -316,7 +316,34 @@ def auto_select_roi_using_flow(img, device='cuda'):
     
     return [foreground_mask, background_mask]
 
-def evaluate_oct_denoising(original, denoised, reference=None):
+def auto_select_roi_using_layers(img, layer_boundaries):
+    """
+    Create ROIs based on anatomical layer segmentation
+    layer_boundaries: shape (3, width) - the automatic layers
+    """
+    height, width = img.shape
+    
+    # Create masks between layer boundaries
+    foreground_mask = np.zeros_like(img, dtype=bool)
+    background_mask = np.zeros_like(img, dtype=bool)
+    
+    # Example: Use region between layer 1 and 2 as foreground (high signal retinal tissue)
+    for x in range(width):
+        if layer_boundaries[0, x] < layer_boundaries[1, x]:  # Ensure valid boundaries
+            y_start = int(layer_boundaries[0, x])
+            y_end = int(layer_boundaries[1, x])
+            foreground_mask[y_start:y_end, x] = True
+    
+    # Use deeper region as background (lower signal)
+    for x in range(width):
+        if layer_boundaries[2, x] + 20 < height:  # 20 pixels below layer 3
+            y_start = int(layer_boundaries[2, x]) + 10
+            y_end = min(int(layer_boundaries[2, x]) + 30, height)
+            background_mask[y_start:y_end, x] = True
+    
+    return [foreground_mask, background_mask]
+
+def evaluate_oct_denoising(original, denoised, reference=None, layers=None):
 
     metrics = {}
 
@@ -329,13 +356,17 @@ def evaluate_oct_denoising(original, denoised, reference=None):
     
     metrics['snr'] = calculate_snr(denoised) - calculate_snr(original)
     
-    try:
-        roi_masks = auto_select_roi_using_flow(denoised)
-        print("Using auto-selected ROIs Using Flow for CNR calculation.")
-    except Exception as e:
-        raise e
-        roi_masks = auto_select_roi(denoised)
-        print(f"Using AutoSelect ROI{e}")
+    if layers is None:
+        try:
+            roi_masks = auto_select_roi_using_flow(denoised)
+            print("Using auto-selected ROIs Using Flow for CNR calculation.")
+        except Exception as e:
+            raise e
+            roi_masks = auto_select_roi(denoised)
+            print(f"Using AutoSelect ROI{e}")
+    else:
+        roi_masks = auto_select_roi_using_layers(denoised, layers)
+        print("Using auto-selected ROIs based on anatomical layers for CNR calculation.")
 
     if len(roi_masks) >= 2:
         print("Using auto-selected ROIs for CNR calculation.")

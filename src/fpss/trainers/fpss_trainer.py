@@ -408,14 +408,16 @@ def train_fpss(train_config, loss_fn, loss_name):
     
     set_epoch = 0
 
-    base_checkpoint_path = train_config['checkpoint'].format(loss_fn=loss_name)
+    model_name = train_config['model']
+
+    base_checkpoint_path = train_config['checkpoint'].format(model_name=model_name, loss_fn=loss_name)
 
     parent_dir = os.path.dirname(base_checkpoint_path)
     if not os.path.exists(parent_dir):
         os.makedirs(parent_dir)
         print(f"Created directory: {parent_dir}")
 
-    model_name = train_config['model']
+    
 
     model, optimizer, best_loss, set_epoch, num_epochs, history = get_fpss_model(model_name, train_config, loss_name, num_epochs, learning_rate, optim, base_checkpoint_path)
     

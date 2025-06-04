@@ -11,6 +11,7 @@ from fpss.data import get_paired_loaders
 from fpss.evaluate.evaluate import load_model
 from scipy import stats
 from scipy.stats import ttest_rel, wilcoxon, f_oneway
+from scipy.io import loadmat
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -274,7 +275,7 @@ def create_statistical_plots(stat_results, method):
     plt.tight_layout()
     plt.show()
 
-def main(method=None, soct=True):
+def main(method=None, soct=True, chiu=False):
 
     config_path = os.getenv("N2_CONFIG_PATH")
     config = get_config(config_path)
@@ -293,6 +294,10 @@ def main(method=None, soct=True):
         sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
         dataset = load_sdoct_dataset(sdoct_path)
         samples = list(dataset.keys())
+    elif chiu:
+        mat_path = r"C:\Datasets\OCTData\2011_IOVS_Chiu\Chiu_IOVS_2011\Reproducibility Study\Patient1_Degree00.mat"
+        dataset = loadmat(mat_path)
+        samples = list(dataset['images'])
     else:
         n_images_per_patient = config['training']['n_images_per_patient']
         batch_size = config['training']['batch_size']

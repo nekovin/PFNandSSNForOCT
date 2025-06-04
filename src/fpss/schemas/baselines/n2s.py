@@ -1179,7 +1179,7 @@ def process_batch_n2s_patch(
       model, loader, criterion, optimizer=None,
       device='cuda', speckle_module=None, visualize=False,
       alpha=1.0, scheduler=None, sample=None,
-      patch_size=64, stride=32, n_partitions=2
+      patch_size=64, stride=32, n_partitions=2, adaptive_loss=True
       ):
     
     if optimizer: 
@@ -1260,9 +1260,18 @@ def process_batch_n2s_patch(
                     flow_outputs = normalize_image_torch(flow_outputs)
                     
                     flow_loss = torch.mean(torch.abs(flow_outputs - flow_inputs))
-                    sub_loss = n2s_loss + flow_loss * alpha
+                    #sub_loss = n2s_loss + flow_loss * alpha
+
+                    if adaptive_loss:
+
+                        alpha_adaptive = n2s_loss.detach() / (flow_loss.detach() + 1e-8)
+                        sub_loss = n2s_loss + flow_loss * alpha_adaptive
+                    else:
+                        sub_loss = n2s_loss + flow_loss * alpha
                 
                 batch_loss += sub_loss.item()
+
+
                 
                 # Backpropagation (accumulate gradients)
                 if optimizer is not None:
