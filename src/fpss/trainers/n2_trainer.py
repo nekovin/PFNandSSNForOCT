@@ -155,6 +155,7 @@ def train(config, method, ssm):
         try:
             print("Loading ssm model from checkpoint...")
             ssm_checkpoint_path = train_config['ssm_checkpoint_path']
+            print(f"SSM checkpoint path: {ssm_checkpoint_path}")
             ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
             speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
             speckle_module.to(device)
@@ -169,17 +170,16 @@ def train(config, method, ssm):
 
     if train_config['load']:
         try:
-            checkpoint = torch.load(checkpoint_path + f'_patched_best_checkpoint.pth', map_location=device)
+            last_checkpoint = torch.load(checkpoint_path + f'_patched_last_checkpoint.pth', map_location=device)
+            best_checkpoint = torch.load(checkpoint_path + f'_patched_best_checkpoint.pth', map_location=device)
             print("Loading model from checkpoint...")
-            print(checkpoint_path + f'_patched_best_checkpoint.pth')
-            print(checkpoint.keys())
-            model.load_state_dict(checkpoint['model_state_dict'])
-            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            model.load_state_dict(last_checkpoint['model_state_dict'])
+            optimizer.load_state_dict(last_checkpoint['optimizer_state_dict'])
             print("Model loaded successfully")
-            print(f"Epoch: {checkpoint['epoch']}, Loss: {checkpoint['best_val_loss']}")
-            best_metrics_score = checkpoint['metrics_score']
-            starting_epoch = checkpoint['epoch']
-            best_val_loss = checkpoint['val_loss']
+            print(f"Epoch: {last_checkpoint['epoch']}, Loss: {best_checkpoint['best_val_loss']}")
+            best_metrics_score = best_checkpoint['metrics_score']
+            starting_epoch = last_checkpoint['epoch']
+            best_val_loss = best_checkpoint['val_loss']
         except Exception as e:
             print(f"Error loading model: {e}")
             print("Starting training from scratch.")
@@ -321,7 +321,8 @@ def train(config, method, ssm):
                     best_metrics_score=best_metrics_score,
                     patch_size=train_config['patch_size'], 
                     stride=train_config['stride'], 
-                    n_partitions=train_config['n_partitions']
+                    n_partitions=train_config['n_partitions'],
+                    adaptive_loss=adaptive_loss
                     )
                 
             else:

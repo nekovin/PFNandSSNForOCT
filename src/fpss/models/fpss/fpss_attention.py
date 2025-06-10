@@ -20,7 +20,7 @@ class FPSSAttention(nn.Module):
     """
     Enhanced deeper U-Net architecture for OCT speckle separation with attention mechanisms
     """
-    def __init__(self, input_channels=1, feature_dim=32, depth=5, block_depth=3):
+    def __init__(self, input_channels=1, feature_dim=32, depth=4, block_depth=3):
         """
         Initialize the Deeper Speckle Separation U-Net Module
         

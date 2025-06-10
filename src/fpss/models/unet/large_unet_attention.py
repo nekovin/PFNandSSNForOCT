@@ -82,6 +82,7 @@ class LargeUNetAtt(nn.Module):
         # No dropout before final output
         
         x = self.outc(x)
+        #x = torch.sigmoid(x)
         
         return x
     

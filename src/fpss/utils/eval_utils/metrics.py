@@ -80,52 +80,6 @@ def calculate_snr(img, background_mask=None):
     ratio = abs(signal_mean) / noise_std
     return 20 * np.log10(ratio + epsilon)
 
-def calculate_cnr(img, foreground_mask=None, background_mask=None):
-    """
-    Calculate Contrast-to-Noise Ratio (CNR) for OCT images.
-    Higher is better.
-    
-    Args:
-        img: Input image
-        foreground_mask: Optional mask of foreground regions. If None, estimates foreground.
-        background_mask: Optional mask of background regions. If None, estimates background.
-    
-    Returns:
-        CNR value in dB
-    """
-    # Ensure image is in the right format
-    img = np.asarray(img, dtype=np.float32)
-    
-    # If no masks provided, estimate them
-    if foreground_mask is None or background_mask is None:
-        # Use Otsu's thresholding to separate foreground and background
-        if img.max() <= 1.0:
-            img_8bit = (img * 255).astype(np.uint8)
-        else:
-            img_8bit = img.astype(np.uint8)
-        
-        _, binary = cv2.threshold(img_8bit, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        foreground_mask = binary > 0
-        background_mask = ~foreground_mask
-    
-    # Calculate foreground and background statistics
-    foreground = img[foreground_mask]
-    background = img[background_mask]
-    
-    if len(foreground) == 0 or len(background) == 0:
-        return 0.0
-    
-    foreground_mean = np.mean(foreground)
-    background_mean = np.mean(background)
-    foreground_std = np.std(foreground)
-    background_std = np.std(background)
-    
-    # Calculate CNR
-    denominator = np.sqrt(foreground_std**2 + background_std**2)
-    if denominator == 0:
-        return float('inf')
-    
-    return 10 * np.log10(np.abs(foreground_mean - background_mean) / denominator)
 
 def calculate_enl(img, region_mask=None):
     """
@@ -159,6 +113,37 @@ def calculate_enl(img, region_mask=None):
         return float('inf')
     
     return (mean_val**2) / var_val
+
+def calculate_enl(img, roi_masks=None):
+    """
+    Calculate ENL (Equivalent Number of Looks) for one or more ROIs.
+
+    Args:
+        img (np.ndarray): Input image.
+        roi_masks (list of np.ndarray): List of binary masks for ENL regions.
+
+    Returns:
+        float: Average ENL across all ROIs.
+    """
+    img = np.asarray(img, dtype=np.float32)
+
+    if roi_masks is None or len(roi_masks) == 0:
+        region = img
+        mean_val = np.mean(region)
+        var_val = np.var(region)
+        return float('inf') if var_val == 0 else (mean_val**2) / var_val
+
+    enls = []
+    for mask in roi_masks:
+        region = img[mask > 0]
+        if len(region) == 0:
+            continue
+        mean_val = np.mean(region)
+        var_val = np.var(region)
+        enls.append(float('inf') if var_val == 0 else (mean_val**2) / var_val)
+
+    return np.mean(enls) if enls else 0.0
+
 
 def calculate_epi(img1, img2):
     """
@@ -283,39 +268,6 @@ def calculate_cnr_whole(image):
     
     return cnr_db
 
-def auto_select_roi_using_flow(img, device='cuda'):
-
-    speckle_module = FPSSAttention(input_channels=1, feature_dim=32).to(device)
-    try:
-        print("Loading ssm model from checkpoint...")
-        ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\fpss\fpss_mse_best.pth"
-        ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
-        speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
-        speckle_module.to(device)
-        speckle_module.eval()
-    except Exception as e:
-        print(f"Error loading model: {e}")
-        print("Starting training from scratch.")
-        raise e 
-
-    # Convert numpy array to tensor
-    if len(img.shape) == 2:
-        img_tensor = torch.from_numpy(img).unsqueeze(0).unsqueeze(0).float().to(device)
-    else:
-        img_tensor = torch.from_numpy(img).unsqueeze(0).float().to(device)
-    
-    with torch.no_grad():
-        output = speckle_module(img_tensor)
-        flow = output['flow_component'].cpu().numpy()[0, 0]
-    
-    foreground_mask = flow > 0.1 * flow.max()
-    background_mask = flow < 0.1 * flow.max()
-    #foreground_mask = flow  # Use raw flow values as "weights" rather than binary mask
-    #background_mask = 1.0 - flow
-
-    
-    return [foreground_mask, background_mask]
-
 def auto_select_roi_using_layers(img, layer_boundaries):
     """
     Create ROIs based on anatomical layer segmentation
@@ -343,9 +295,79 @@ def auto_select_roi_using_layers(img, layer_boundaries):
     
     return [foreground_mask, background_mask]
 
-def evaluate_oct_denoising(original, denoised, reference=None, layers=None):
+import matplotlib.pyplot as plt
 
+
+def calculate_cnr(img, roi_masks=None):
+    """
+    Calculate average pairwise CNR for an image using multiple ROI masks.
+
+    Args:
+        img (np.ndarray): Input image.
+        roi_masks (list of np.ndarray): List of binary ROI masks.
+
+    Returns:
+        float: Mean pairwise CNR across all ROI combinations.
+    """
+    img = np.asarray(img, dtype=np.float32)
+
+    if roi_masks is None or len(roi_masks) < 2:
+        raise ValueError("Need at least two ROI masks for CNR calculation.")
+
+    # Convert roi_masks to numpy if they're torch tensors
+    numpy_masks = []
+    for mask in roi_masks:
+        if hasattr(mask, 'cpu'):
+            numpy_masks.append(mask.cpu().numpy())
+        elif isinstance(mask, torch.Tensor):
+            numpy_masks.append(mask.numpy())
+        else:
+            numpy_masks.append(np.asarray(mask))
+
+    print(f"Calculating CNR using {len(numpy_masks)} ROI masks")
+    
+    cnr_values = []
+    for i in range(len(numpy_masks)):
+        for j in range(i + 1, len(numpy_masks)):
+            fg = img[numpy_masks[i] > 0]
+            bg = img[numpy_masks[j] > 0]
+
+            if len(fg) == 0 or len(bg) == 0:
+                print(f"Warning: Empty ROI found (ROI {i} has {len(fg)} pixels, ROI {j} has {len(bg)} pixels)")
+                continue
+
+            fg_mean, fg_std = np.mean(fg), np.std(fg)
+            bg_mean, bg_std = np.mean(bg), np.std(bg)
+            
+            print(f"ROI {i}: mean={fg_mean:.4f}, std={fg_std:.4f}, pixels={len(fg)}")
+            print(f"ROI {j}: mean={bg_mean:.4f}, std={bg_std:.4f}, pixels={len(bg)}")
+            
+            denom = np.sqrt(fg_std**2 + bg_std**2)
+            if denom == 0:
+                print(f"Warning: Zero denominator for ROI pair {i},{j}")
+                continue
+                
+            cnr = 10 * np.log10(np.abs(fg_mean - bg_mean) / denom)
+            print(f"CNR between ROI {i} and {j}: {cnr:.4f} dB")
+            cnr_values.append(cnr)
+
+    final_cnr = float(np.mean(cnr_values)) if cnr_values else 0.0
+    print(f"Average CNR: {final_cnr:.4f} dB")
+    return final_cnr
+
+def evaluate_oct_denoising(original, denoised, reference=None, layers=None):
     metrics = {}
+
+    print("Original image intensity distribution:")
+    print(f"  0-0.1 range: {np.sum((original >= 0) & (original <= 0.1))} pixels")
+    print(f"  0.1-0.3 range: {np.sum((original > 0.1) & (original <= 0.3))} pixels") 
+    print(f"  0.3-0.7 range: {np.sum((original > 0.3) & (original <= 0.7))} pixels")
+
+    print("Denoised image intensity distribution:")  
+    print(f"  0-0.1 range: {np.sum((denoised >= 0) & (denoised <= 0.1))} pixels")
+    print(f"  0.1-0.3 range: {np.sum((denoised > 0.1) & (denoised <= 0.3))} pixels")
+    print(f"  0.3-0.7 range: {np.sum((denoised > 0.3) & (denoised <= 0.7))} pixels")
+    
 
     if reference is None:
         metrics['psnr'] = np.nan
@@ -358,24 +380,101 @@ def evaluate_oct_denoising(original, denoised, reference=None, layers=None):
     
     if layers is None:
         try:
-            roi_masks = auto_select_roi_using_flow(denoised)
-            print("Using auto-selected ROIs Using Flow for CNR calculation.")
+            roi_masks = get_roi(denoised)
+            #roi_masks = auto_select_roi(denoised)
+            print("Using static ROIs for CNR calculation.")
         except Exception as e:
             raise e
-            roi_masks = auto_select_roi(denoised)
-            print(f"Using AutoSelect ROI{e}")
     else:
-        roi_masks = auto_select_roi_using_layers(denoised, layers)
-        print("Using auto-selected ROIs based on anatomical layers for CNR calculation.")
+        raise ValueError("Layer-based ROI selection is not implemented yet. Please provide ROI masks manually.")
 
+    #if len(roi_masks) >= 2:
+        #print(f"Using {len(roi_masks)} ROIs for CNR calculation.")
+        #metrics['cnr'] = calculate_cnr(denoised, roi_masks) - calculate_cnr(original, roi_masks)
     if len(roi_masks) >= 2:
-        print("Using auto-selected ROIs for CNR calculation.")
-        metrics['cnr'] = calculate_cnr(denoised, roi_masks[0], roi_masks[1]) - calculate_cnr(original, roi_masks[0], roi_masks[1])
+        print(f"Using {len(roi_masks)} ROIs for CNR calculation.")
+        
+        print("\n--- ORIGINAL IMAGE CNR ---")
+        cnr_original = calculate_cnr(original, roi_masks)
+        
+        print("\n--- DENOISED IMAGE CNR ---")
+        cnr_denoised = calculate_cnr(denoised, roi_masks)
+        
+        print(f"\n--- CNR SUMMARY ---")
+        print(f"Original CNR: {cnr_original:.4f} dB")
+        print(f"Denoised CNR: {cnr_denoised:.4f} dB")
+        print(f"CNR Change: {cnr_denoised - cnr_original:.4f} dB")
+        
+        if cnr_denoised > cnr_original:
+            print("✓ GOOD: Denoising improved contrast")
+        else:
+            print("✗ WARNING: Denoising reduced contrast - may be over-smoothing")
+        
+        metrics['cnr'] = cnr_denoised - cnr_original
     else:
-        metrics['cnr'] = calculate_cnr_whole(denoised) - calculate_cnr_whole(original)
+        raise ValueError("Not enough ROIs selected for CNR calculation. At least 2 are required.")
     
     if len(roi_masks) > 0:
-        metrics['enl'] = calculate_enl(denoised, roi_masks[0]) - calculate_enl(original, roi_masks[0])
+        metrics['enl'] = calculate_enl(denoised, roi_masks) - calculate_enl(original, roi_masks)
+    
+    metrics['epi'] = calculate_epi(original, denoised)
+    
+    return metrics
+
+def evaluate_oct_denoising(original, denoised, reference=None, layers=None):
+    metrics = {}
+
+    if reference is None:
+        metrics['psnr'] = np.nan
+        metrics['ssim'] = np.nan
+    else:
+        # Apply same correction to reference if provided
+        #reference_norm = (reference - global_min) / (global_max - global_min)
+        metrics['psnr'] = calculate_psnr(denoised, reference)
+        metrics['ssim'] = calculate_ssim(denoised, reference)
+    
+    metrics['snr'] = calculate_snr(denoised)# - calculate_snr(original)
+    metrics['snr_change'] = calculate_snr(denoised) - calculate_snr(original)
+    
+    if layers is None:
+        try:
+            roi_masks = get_roi(denoised)
+            print("Using static ROIs for CNR calculation.")
+        except Exception as e:
+            raise e
+    else:
+        #raise ValueError("Layer-based ROI selection is not implemented yet. Please provide ROI masks manually.")
+        roi_masks = auto_select_roi_using_layers(denoised, layers)
+
+    if len(roi_masks) >= 2:
+        print(f"Using {len(roi_masks)} ROIs for CNR calculation.")
+        
+        print("\n--- ORIGINAL IMAGE CNR ---")
+        cnr_original = calculate_cnr(original, roi_masks)
+        
+        print("\n--- DENOISED IMAGE CNR (with black correction) ---")
+        cnr_denoised = calculate_cnr(denoised, roi_masks)
+        
+        print(f"\n--- CNR SUMMARY ---")
+        print(f"Original CNR: {cnr_original:.4f} dB")
+        print(f"Denoised CNR: {cnr_denoised:.4f} dB")
+        print(f"CNR Change: {cnr_denoised - cnr_original:.4f} dB")
+        
+        
+        if cnr_denoised > cnr_original:
+            print("✓ GOOD: Denoising improved contrast")
+        else:
+            print("✗ WARNING: Denoising reduced contrast - may be over-smoothing")
+
+
+        metrics['cnr'] = cnr_denoised
+        metrics['cnr_change'] = cnr_denoised - cnr_original
+    else:
+        raise ValueError("Not enough ROIs selected for CNR calculation. At least 2 are required.")
+    
+    if len(roi_masks) > 0:
+        metrics['enl'] = calculate_enl(denoised, roi_masks)# - calculate_enl(original, roi_masks)
+        metrics['enl_change'] = calculate_enl(denoised, roi_masks)- calculate_enl(original, roi_masks)
     
     metrics['epi'] = calculate_epi(original, denoised)
     
@@ -572,3 +671,391 @@ def display_grouped_metrics(metrics):
                 all_dfs[schema] = df
         
         return all_dfs
+
+###
+
+
+def get_roi(denoised):
+    roi_list = []
+    try:
+        # Convert to numpy if it's a torch tensor
+        if hasattr(denoised, 'cpu'):
+            denoised_np = denoised.cpu().numpy()
+        elif isinstance(denoised, torch.Tensor):
+            denoised_np = denoised.numpy()
+        else:
+            denoised_np = np.asarray(denoised)
+
+        h, w = denoised_np.shape[-2:]
+        roi_size = h // 15
+        center_y = h // 2
+        quarter_w = w // 4
+
+        coords = [
+            (center_y - roi_size, w // 2 - roi_size),         # Center tissue
+            #(center_y - roi_size, 3 * quarter_w - roi_size),  # Right tissue  
+            (10, w // 2 - roi_size),                          # Top background (dark region)
+            #(h - roi_size - 10, w // 2 - roi_size)           # Bottom background
+        ]
+
+        for idx, (y, x) in enumerate(coords):
+            # Create numpy array ROI mask instead of torch tensor
+            roi = np.zeros_like(denoised_np, dtype=np.float32)
+            
+            # Ensure coordinates are within bounds
+            y_start = max(0, y)
+            
+            #y_end = min(h, y + roi_size)
+            y_end = min(h, y + 3 * roi_size)
+            x_start = max(0, x)
+            x_end = min(w, x + 2 * roi_size)  # Keep your original 2*roi_size width
+            
+            roi[y_start:y_end, x_start:x_end] = 1
+            
+            # Count pixels in this ROI
+            roi_pixels = np.sum(roi > 0)
+            print(f"ROI {idx}: shape={roi.shape}, coordinates=({y_start}:{y_end}, {x_start}:{x_end}), pixels={roi_pixels}")
+            
+            roi_list.append(roi)
+
+        # Visualization
+        overlay = denoised_np.copy()
+        mask = np.sum(roi_list, axis=0)
+
+        plt.figure(figsize=(6, 6))
+        plt.imshow(overlay, cmap='gray')
+        plt.imshow(mask, cmap='Reds', alpha=0.3)  # Increased alpha to see ROIs better
+        plt.title("Static ROI Visualisation")
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
+
+    except Exception as e:
+        print(f"Error creating static ROIs: {e}")
+        raise e
+
+    return roi_list
+
+def get_roi(denoised):
+    roi_list = []
+    try:
+        # Convert to numpy if it's a torch tensor
+        if hasattr(denoised, 'cpu'):
+            denoised_np = denoised.cpu().numpy()
+        elif isinstance(denoised, torch.Tensor):
+            denoised_np = denoised.numpy()
+        else:
+            denoised_np = np.asarray(denoised)
+
+        h, w = denoised_np.shape[-2:]
+        roi_size = h // 15
+        center_y = h // 2
+
+        coords = [
+            (center_y - roi_size, w // 2 - roi_size),         # Center tissue
+            (10, w // 2 - roi_size),                          # Top background (dark region)
+        ]
+
+        # For visualization, create boundary boxes instead
+        from matplotlib.patches import Rectangle
+        
+        plt.figure(figsize=(6, 6))
+        plt.imshow(denoised_np, cmap='gray')
+        
+        for idx, (y, x) in enumerate(coords):
+            roi = np.zeros_like(denoised_np, dtype=np.float32)
+            
+            y_start = max(0, y)
+            y_end = min(h, y + 2 * roi_size)
+            x_start = max(0, x)
+            x_end = min(w, x + 2 * roi_size)
+            
+            roi[y_start:y_end, x_start:x_end] = 1
+            
+            roi_pixels = np.sum(roi > 0)
+            print(f"ROI {idx}: coordinates=({y_start}:{y_end}, {x_start}:{x_end}), pixels={roi_pixels}")
+            
+            roi_list.append(roi)
+            
+            # Add rectangle boundary to plot
+            rect = Rectangle((x_start, y_start), x_end-x_start, y_end-y_start, 
+                           linewidth=2, edgecolor='red', facecolor='none', alpha=0.8)
+            plt.gca().add_patch(rect)
+            
+            # Add ROI label
+            plt.text(x_start+5, y_start+15, f'ROI {idx}', color='red', fontsize=10, fontweight='bold')
+
+        plt.title("Static ROI Visualisation")
+        plt.axis('off')
+        plt.tight_layout()
+        plt.show()
+
+    except Exception as e:
+        print(f"Error creating static ROIs: {e}")
+        raise e
+
+    return roi_list
+
+def calculate_cnr(img, roi_masks=None):
+    """
+    Calculate average pairwise CNR for an image using multiple ROI masks.
+
+    Args:
+        img (np.ndarray): Input image.
+        roi_masks (list of np.ndarray): List of binary ROI masks.
+
+    Returns:
+        float: Mean pairwise CNR across all ROI combinations.
+    """
+    img = np.asarray(img, dtype=np.float32)
+
+    if roi_masks is None or len(roi_masks) < 2:
+        raise ValueError("Need at least two ROI masks for CNR calculation.")
+
+    # Convert roi_masks to numpy if they're torch tensors
+    numpy_masks = []
+    for mask in roi_masks:
+        if hasattr(mask, 'cpu'):
+            numpy_masks.append(mask.cpu().numpy())
+        elif isinstance(mask, torch.Tensor):
+            numpy_masks.append(mask.numpy())
+        else:
+            numpy_masks.append(np.asarray(mask))
+
+    print(f"Calculating CNR using {len(numpy_masks)} ROI masks")
+    
+    # ADD ROI ANALYSIS FIRST
+    print(f"=== ROI VALUE ANALYSIS ===")
+    for k, mask in enumerate(numpy_masks):
+        region_pixels = img[mask > 0]
+        region_mean = np.mean(region_pixels)
+        region_std = np.std(region_pixels)
+        #region_type = "TISSUE" if k < 2 else "BACKGROUND"
+        if len(numpy_masks) == 2:
+            region_type = "TISSUE" if k == 0 else "BACKGROUND"  # First is tissue, second is background
+        else:
+            region_type = "TISSUE" if k < 2 else "BACKGROUND" 
+        print(f"ROI {k} ({region_type}): mean = {region_mean:.4f}, std = {region_std:.4f}")
+        
+        if k >= 2:  # Background ROIs
+            very_dark_pixels = np.sum(region_pixels < 0.1)
+            dark_pixels = np.sum(region_pixels < 0.2)
+            print(f"  Very dark pixels (< 0.1): {very_dark_pixels}/{len(region_pixels)} ({very_dark_pixels/len(region_pixels)*100:.1f}%)")
+            print(f"  Dark pixels (< 0.2): {dark_pixels}/{len(region_pixels)} ({dark_pixels/len(region_pixels)*100:.1f}%)")
+    print(f"=== END ANALYSIS ===")
+    
+    cnr_values = []
+    for i in range(len(numpy_masks)):
+        for j in range(i + 1, len(numpy_masks)):
+            fg = img[numpy_masks[i] > 0]
+            bg = img[numpy_masks[j] > 0]
+
+            if len(fg) == 0 or len(bg) == 0:
+                print(f"Warning: Empty ROI found (ROI {i} has {len(fg)} pixels, ROI {j} has {len(bg)} pixels)")
+                continue
+
+            fg_mean, fg_std = np.mean(fg), np.std(fg)
+            bg_mean, bg_std = np.mean(bg), np.std(bg)
+            
+            print(f"ROI {i}: mean={fg_mean:.4f}, std={fg_std:.4f}, pixels={len(fg)}")
+            print(f"ROI {j}: mean={bg_mean:.4f}, std={bg_std:.4f}, pixels={len(bg)}")
+            
+            denom = np.sqrt(fg_std**2 + bg_std**2)
+            if denom == 0:
+                print(f"Warning: Zero denominator for ROI pair {i},{j}")
+                continue
+                
+            cnr = 10 * np.log10(np.abs(fg_mean - bg_mean) / denom)
+            print(f"CNR between ROI {i} and {j}: {cnr:.4f} dB")
+            cnr_values.append(cnr)
+
+    final_cnr = float(np.mean(cnr_values)) if cnr_values else 0.0
+    print(f"Average CNR: {final_cnr:.4f} dB")
+    return final_cnr
+
+
+#
+
+def calculate_cnr_with_full_debug(img, roi_masks=None, image_name="Unknown"):
+    """
+    Calculate CNR with comprehensive debugging to understand the contradiction
+    """
+    img = np.asarray(img, dtype=np.float32)
+
+    if roi_masks is None or len(roi_masks) < 2:
+        raise ValueError("Need at least two ROI masks for CNR calculation.")
+
+    print(f"\n{'='*60}")
+    print(f"COMPREHENSIVE CNR DEBUG FOR {image_name}")
+    print(f"{'='*60}")
+    
+    # Overall image statistics
+    print(f"WHOLE IMAGE STATS:")
+    print(f"  Min: {img.min():.4f}")
+    print(f"  Max: {img.max():.4f}")
+    print(f"  Mean: {img.mean():.4f}")
+    print(f"  Std: {img.std():.4f}")
+    
+    # Intensity distribution
+    print(f"\nINTENSITY DISTRIBUTION:")
+    for threshold in [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]:
+        count = np.sum(img <= threshold)
+        percentage = count / img.size * 100
+        print(f"  <= {threshold}: {count} pixels ({percentage:.1f}%)")
+    
+    # Convert roi_masks to numpy
+    numpy_masks = []
+    for mask in roi_masks:
+        if hasattr(mask, 'cpu'):
+            numpy_masks.append(mask.cpu().numpy())
+        elif isinstance(mask, torch.Tensor):
+            numpy_masks.append(mask.numpy())
+        else:
+            numpy_masks.append(np.asarray(mask))
+
+    print(f"\nROI DETAILED ANALYSIS:")
+    roi_stats = []
+    
+    for k, mask in enumerate(numpy_masks):
+        region_pixels = img[mask > 0]
+        region_mean = np.mean(region_pixels)
+        region_std = np.std(region_pixels)
+        region_min = np.min(region_pixels)
+        region_max = np.max(region_pixels)
+        region_type = "TISSUE" if k < 2 else "BACKGROUND"
+        
+        roi_stats.append({
+            'mean': region_mean,
+            'std': region_std,
+            'min': region_min,
+            'max': region_max,
+            'pixels': len(region_pixels)
+        })
+        
+        print(f"  ROI {k} ({region_type}):")
+        print(f"    Mean: {region_mean:.4f}")
+        print(f"    Std:  {region_std:.4f}")
+        print(f"    Min:  {region_min:.4f}")
+        print(f"    Max:  {region_max:.4f}")
+        print(f"    Pixels: {len(region_pixels)}")
+        
+        # Show distribution within this ROI
+        if k >= 2:  # Background ROIs
+            very_dark = np.sum(region_pixels < 0.1)
+            dark = np.sum(region_pixels < 0.2)
+            medium_dark = np.sum(region_pixels < 0.3)
+            print(f"    Very dark (< 0.1): {very_dark}/{len(region_pixels)} ({very_dark/len(region_pixels)*100:.1f}%)")
+            print(f"    Dark (< 0.2): {dark}/{len(region_pixels)} ({dark/len(region_pixels)*100:.1f}%)")
+            print(f"    Medium dark (< 0.3): {medium_dark}/{len(region_pixels)} ({medium_dark/len(region_pixels)*100:.1f}%)")
+
+    print(f"\nCNR CALCULATIONS:")
+    cnr_values = []
+    tissue_to_background_cnrs = []
+    
+    for i in range(len(numpy_masks)):
+        for j in range(i + 1, len(numpy_masks)):
+            fg = img[numpy_masks[i] > 0]
+            bg = img[numpy_masks[j] > 0]
+
+            if len(fg) == 0 or len(bg) == 0:
+                continue
+
+            fg_mean, fg_std = np.mean(fg), np.std(fg)
+            bg_mean, bg_std = np.mean(bg), np.std(bg)
+            
+            # Calculate CNR components
+            mean_diff = abs(fg_mean - bg_mean)
+            combined_std = np.sqrt(fg_std**2 + bg_std**2)
+            cnr_linear = mean_diff / combined_std if combined_std > 0 else 0
+            cnr_db = 10 * np.log10(cnr_linear) if cnr_linear > 0 else -np.inf
+            
+            # Identify what type of comparison this is
+            roi_i_type = "TISSUE" if i < 2 else "BACKGROUND"
+            roi_j_type = "TISSUE" if j < 2 else "BACKGROUND"
+            comparison_type = f"{roi_i_type} vs {roi_j_type}"
+            
+            print(f"  ROI {i} vs ROI {j} ({comparison_type}):")
+            print(f"    Mean difference: {mean_diff:.4f}")
+            print(f"    Combined noise: {combined_std:.4f}")
+            print(f"    CNR linear: {cnr_linear:.4f}")
+            print(f"    CNR dB: {cnr_db:.4f}")
+            
+            # Track tissue-to-background CNRs separately
+            #if (i < 2 and j >= 2) or (i >= 2 and j < 2):
+                #tissue_to_background_cnrs.append(cnr_db)
+                #print(f"    *** This is a TISSUE-BACKGROUND comparison ***")
+            
+            if len(numpy_masks) == 2:
+                tissue_to_background_cnrs.append(cnr_db)  # The only comparison is tissue vs background
+            elif (i < 2 and j >= 2) or (i >= 2 and j < 2):
+                tissue_to_background_cnrs.append(cnr_db)
+            cnr_values.append(cnr_db)
+
+    # Summary analysis
+    print(f"\nSUMMARY ANALYSIS:")
+    final_cnr = float(np.mean(cnr_values)) if cnr_values else 0.0
+    tissue_bg_cnr = float(np.mean(tissue_to_background_cnrs)) if tissue_to_background_cnrs else 0.0
+    
+    print(f"  Overall average CNR: {final_cnr:.4f} dB")
+    print(f"  Tissue-to-Background CNR: {tissue_bg_cnr:.4f} dB")
+    print(f"  Number of tissue-background comparisons: {len(tissue_to_background_cnrs)}")
+    
+    # Diagnose potential issues
+    print(f"\nDIAGNOSIS:")
+    
+    # Check if background ROIs are actually dark
+    bg_roi_means = [roi_stats[i]['mean'] for i in range(2, len(roi_stats))]
+    avg_bg_mean = np.mean(bg_roi_means)
+    
+    if avg_bg_mean > 0.4:
+        print(f"  ⚠️  ISSUE: Background ROIs have high intensity (avg={avg_bg_mean:.3f})")
+        print(f"     Background ROIs might be hitting tissue instead of dark regions!")
+    elif avg_bg_mean < 0.2:
+        print(f"  ✓ Background ROIs properly measuring dark regions (avg={avg_bg_mean:.3f})")
+    else:
+        print(f"  ? Background ROIs measuring medium intensity (avg={avg_bg_mean:.3f})")
+    
+    # Check tissue vs background separation
+    tissue_roi_means = [roi_stats[i]['mean'] for i in range(0, 2)]
+    avg_tissue_mean = np.mean(tissue_roi_means)
+    contrast_ratio = avg_tissue_mean / avg_bg_mean if avg_bg_mean > 0 else float('inf')
+    
+    print(f"  Tissue mean: {avg_tissue_mean:.3f}")
+    print(f"  Background mean: {avg_bg_mean:.3f}")
+    print(f"  Contrast ratio: {contrast_ratio:.2f}")
+    
+    if contrast_ratio < 1.5:
+        print(f"  ⚠️  ISSUE: Low contrast ratio! Tissue and background too similar.")
+    elif contrast_ratio > 3.0:
+        print(f"  ✓ Good contrast ratio between tissue and background")
+    
+    print(f"{'='*60}\n")
+    
+    return final_cnr
+
+def calculate_percentile_cnr(img):
+    """Use percentiles instead of fixed ROIs"""
+    # Get brightest 20% as tissue
+    tissue_threshold = np.percentile(img, 90)
+    tissue_pixels = img[img >= tissue_threshold]
+    
+    # Get darkest 20% as background  
+    bg_threshold = np.percentile(img, 30)
+    bg_pixels = img[img <= bg_threshold]
+    
+    # Calculate CNR
+    tissue_mean, tissue_std = np.mean(tissue_pixels), np.std(tissue_pixels)
+    bg_mean, bg_std = np.mean(bg_pixels), np.std(bg_pixels)
+    
+    mean_diff = abs(tissue_mean - bg_mean)
+    combined_std = np.sqrt(tissue_std**2 + bg_std**2)
+    cnr = 10 * np.log10(mean_diff / combined_std) if combined_std > 0 else 0
+    
+    print(f"Percentile CNR: tissue={tissue_mean:.3f}, bg={bg_mean:.3f}, CNR={cnr:.2f} dB")
+    return cnr
+
+# Modified calculate_cnr function to use the debug version
+def calculate_cnr(img, roi_masks=None, debug_name="Image"):
+    """Use the comprehensive debug version"""
+    return calculate_cnr_with_full_debug(img, roi_masks, debug_name)
+    #return calculate_percentile_cnr(img)

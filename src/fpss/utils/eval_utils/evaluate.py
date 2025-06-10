@@ -7,7 +7,7 @@ import numpy as np
 from skimage import io
 from skimage.transform import resize
 
-from fpss.utils import normalize_image
+from fpss.utils import normalize_image, normalize_image_np
 from fpss.utils.eval_utils.metrics import evaluate_oct_denoising
 
 def get_sample_image(dataloader, device):
@@ -71,9 +71,11 @@ def evaluate(image, reference, model, method):
 
     denoised = denoise_image(model, image_tensor, device='cuda')
 
-    denoised = denoised[-1]
-
     #denoised = normalize_image(denoised)
+
+    #denoised = denoised[-1]
+
+    
 
     print(f"Image shape: {image_tensor.shape}")
     print(f"Denoised shape: {denoised.shape}")
@@ -90,6 +92,8 @@ def evaluate(image, reference, model, method):
             denoised_np = denoised_np[0, 0]
         elif len(denoised_np.shape) == 3:  # [channel, height, width] or [batch, height, width]
             denoised_np = denoised_np[0]
+
+    denoised_np = normalize_image_np(denoised_np)
     
     # Handle reference (could be tensor or numpy)
     if isinstance(reference, torch.Tensor):
@@ -113,7 +117,6 @@ def evaluate(image, reference, model, method):
     print(f"Denoised shape: {denoised_np.shape}")
     print(f"Reference shape: {reference_np.shape}")
     
-    # Calculate metrics
     metrics = evaluate_oct_denoising(original_image, denoised_np, reference_np)
     
     return metrics, denoised_np
@@ -122,6 +125,45 @@ from fpss.utils.data_utils.standard_preprocessing import normalize_image
 
 
 def load_sdoct_dataset(dataset_path, target_size=(256, 256)):
+
+    sdoct_data = {}
+    patients = os.listdir(dataset_path)
+    
+    print(f"Loading SDOCT dataset from {dataset_path}")
+    for patient in tqdm(patients, desc="Loading patients"):
+        patient_path = os.path.join(dataset_path, patient)
+        avg_path = os.path.join(patient_path, f"{patient}_Averaged Image.tif")
+        raw_path = os.path.join(patient_path, f"{patient}_Raw Image.tif")
+        
+        try:
+            if not os.path.exists(avg_path) or not os.path.exists(raw_path):
+                print(f"Missing files for patient {patient}")
+                continue
+                
+            raw_img = io.imread(raw_path)
+            avg_img = io.imread(avg_path)
+                
+            # Resize images
+            raw_img = resize(raw_img, target_size, anti_aliasing=True)
+            avg_img = resize(avg_img, target_size, anti_aliasing=True)
+            
+            raw_tensor = torch.from_numpy(raw_img).float().unsqueeze(0).unsqueeze(0)
+            avg_tensor = torch.from_numpy(avg_img).float().unsqueeze(0).unsqueeze(0)
+            
+            sdoct_data[patient] = {
+                "raw": raw_tensor,
+                "avg": avg_tensor,
+                "raw_np": raw_img,
+                "avg_np": avg_img
+            }
+            
+        except Exception as e:
+            print(f"Error processing patient {patient}: {e}")
+    
+    print(f"Successfully loaded {len(sdoct_data)} SDOCT patients")
+    return sdoct_data
+
+def load_duke_dataset(dataset_path, target_size=(256, 256)):
 
     sdoct_data = {}
     patients = os.listdir(dataset_path)

@@ -553,7 +553,7 @@ from fpss.utils.data_utils.patch_processing import extract_patches, reconstruct_
 from fpss.utils.data_utils.standard_preprocessing import normalize_image_torch
 from fpss.utils.noise import create_blind_spot_input_with_realistic_noise
 
-def process_batch_n2v_patch(
+def _process_batch_n2v_patch(
         model, loader, criterion, mask_ratio,
         optimizer=None,  # Optional parameter - present for training, None for evaluation
         device='cuda',
@@ -629,7 +629,6 @@ def process_batch_n2v_patch(
                     n2v_loss1 = criterion(outputs1[mask > 0], raw1_sub_batch[mask > 0])
 
                     if adaptive_loss:
-
                         alpha_adaptive = n2v_loss1.detach() / (flow_loss1.detach() + 1e-8)
                         sub_loss = n2v_loss1 + flow_loss1 * alpha_adaptive
                     else:
@@ -713,3 +712,340 @@ def process_batch_n2v_patch(
         return total_loss / len(loader), metrics
     else:
         return total_loss / len(loader)
+    
+def process_batch_n2v_patch(
+        model, loader, criterion, mask_ratio,
+        optimizer=None,  # Optional parameter - present for training, None for evaluation
+        device='cuda',
+        speckle_module=None,
+        visualize=False,
+        alpha=1.0,
+        scheduler=None,
+        sample=None,
+        patch_size = 64,  # Choose appropriate patch size
+        stride = 32 ,
+        adaptive_loss=False
+        ):
+    
+    if optimizer: 
+        model.train()
+    else:
+        model.eval()
+
+    threshold = 0.5
+    total_loss = 0.0
+    metrics = None
+    
+    context_manager = torch.no_grad() if not optimizer else nullcontext()
+    
+    for batch_idx, batch in enumerate(tqdm(loader)):
+        raw1, _ = batch
+        raw1 = raw1.to(device)
+
+        # Extract patches
+        raw1_patches, patch_locations1 = extract_patches(raw1, patch_size, stride)
+        print(f"Raw1 patches shape: {raw1_patches.shape}")
+        
+        # Process patches in sub-batches
+        sub_batch_size = 32
+        n2v_losses = []
+        all_output1_patches = []
+        all_masks = []
+        all_raw_patches = []
+        
+        # Forward pass through patches
+        with context_manager:
+            for i in range(0, len(raw1_patches), sub_batch_size):
+                raw1_sub_batch = raw1_patches[i:i+sub_batch_size]
+                
+                mask = torch.bernoulli(torch.full((raw1_sub_batch.size(0), 1, raw1_sub_batch.size(2), raw1_sub_batch.size(3)), 
+                                            mask_ratio, device=device))
+                
+                blind1 = create_blind_spot_input_with_realistic_noise(raw1_sub_batch, mask)
+                if optimizer:
+                    blind1 = blind1.requires_grad_(True)
+                
+                outputs1 = model(blind1)
+                
+                if optimizer:
+                    # Store for gradient computation
+                    all_output1_patches.append(outputs1)
+                    all_masks.append(mask)
+                    all_raw_patches.append(raw1_sub_batch)
+                else:
+                    all_output1_patches.append(outputs1.detach())
+                
+                # Compute N2V loss for this sub-batch
+                n2v_loss = criterion(outputs1[mask > 0], raw1_sub_batch[mask > 0])
+                n2v_losses.append(n2v_loss if optimizer else n2v_loss.item())
+        
+        # Reconstruct full images
+        if optimizer:
+            output1_patches = torch.cat(all_output1_patches, dim=0)
+        else:
+            output1_patches = torch.cat(all_output1_patches, dim=0)
+            
+        reconstructed_outputs1 = reconstruct_from_patches(
+            output1_patches, patch_locations1, raw1.shape, patch_size
+        )
+        
+        # Compute total loss
+        if optimizer:
+            # Training mode - maintain gradients
+            total_n2v_loss = sum(n2v_losses)
+            
+            if speckle_module is not None:
+                # Flow computation with gradients
+                flow_inputs = speckle_module(raw1)['flow_component'].detach()
+                flow_inputs = normalize_image_torch(flow_inputs)
+                flow_inputs = threshold_patches(flow_inputs, threshold=threshold)
+                
+                flow_outputs = speckle_module(reconstructed_outputs1)['flow_component']
+                flow_outputs = normalize_image_torch(flow_outputs)
+                flow_outputs = threshold_patches(flow_outputs, threshold=threshold)
+                
+                flow_loss = torch.mean(torch.abs(flow_inputs - flow_outputs))
+                
+                if adaptive_loss:
+                    alpha_adaptive = total_n2v_loss.detach() / (flow_loss.detach() + 1e-8)
+                    total_batch_loss = total_n2v_loss + flow_loss * alpha_adaptive
+                else:
+                    total_batch_loss = total_n2v_loss + flow_loss * alpha
+            else:
+                total_batch_loss = total_n2v_loss
+                flow_loss = None
+            
+            # Single backward pass
+            optimizer.zero_grad()
+            total_batch_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+            
+            batch_loss_value = total_batch_loss.item()
+            
+        else:
+            # Evaluation mode
+            batch_n2v_loss = sum(n2v_losses)
+            
+            if speckle_module is not None:
+                flow_inputs = speckle_module(raw1)['flow_component'].detach()
+                flow_inputs = normalize_image_torch(flow_inputs)
+                flow_inputs = threshold_patches(flow_inputs, threshold=threshold)
+                
+                flow_outputs = speckle_module(reconstructed_outputs1.detach())['flow_component'].detach()
+                flow_outputs = normalize_image_torch(flow_outputs)
+                flow_outputs = threshold_patches(flow_outputs, threshold=threshold)
+                
+                flow_loss = torch.mean(torch.abs(flow_inputs - flow_outputs))
+                
+                if adaptive_loss:
+                    alpha_adaptive = batch_n2v_loss / (flow_loss.item() + 1e-8)
+                    batch_loss_value = batch_n2v_loss + flow_loss.item() * alpha_adaptive
+                else:
+                    batch_loss_value = batch_n2v_loss + flow_loss.item() * alpha
+            else:
+                batch_loss_value = batch_n2v_loss
+                flow_loss = None
+        
+        total_loss += batch_loss_value
+        
+        # Visualization
+        if visualize and batch_idx == 0:
+            sample_output = model(sample)
+            sample_output = sample_output.cpu().numpy()
+            
+            if speckle_module is not None:
+                titles = ['Input Image', 'Flow Input', 'Flow Output', 'Blind Spot Input', 'Output Image', 'Sample Input', 'Sample Output']
+                images = [
+                    raw1[0][0].cpu().numpy(), 
+                    flow_inputs[0][0].cpu().numpy(),
+                    flow_outputs[0][0].cpu().numpy(),
+                    blind1[0][0].cpu().numpy(), 
+                    reconstructed_outputs1[0][0].cpu().numpy(),
+                    sample.cpu().numpy()[0][0] if sample is not None else None,
+                    sample_output[0][0] if sample is not None else None
+                ]
+                losses = {
+                    'Flow Loss': flow_loss.item() if flow_loss is not None else 0,
+                    'Total Loss': batch_loss_value
+                }
+            else:
+                titles = ['Input Image', 'Blind Spot Input', 'Output Image', "Sample Input", "Sample Output"]
+                images = [
+                    raw1[0][0].cpu().numpy(), 
+                    blind1[0][0].cpu().numpy(), 
+                    reconstructed_outputs1[0][0].cpu().numpy(),
+                    sample.cpu().numpy()[0][0] if sample is not None else None,
+                    sample_output[0][0] if sample is not None else None
+                ]
+                losses = {
+                    'Total Loss': batch_loss_value
+                }
+                
+            plot_images(images, titles, losses)
+
+            from fpss.utils import evaluate_oct_denoising
+            metrics = evaluate_oct_denoising(raw1[0][0].cpu().numpy(), reconstructed_outputs1[0][0].cpu().numpy())
+
+    if metrics is not None:
+        return total_loss / len(loader), metrics
+    else:
+        return total_loss / len(loader)
+    
+def process_batch_n2v_patch(
+       model, loader, criterion, mask_ratio,
+       optimizer=None,
+       device='cuda',
+       speckle_module=None,
+       visualize=False,
+       alpha=1.0,
+       scheduler=None,
+       sample=None,
+       patch_size = 64,
+       stride = 32,
+       adaptive_loss=False
+       ):
+   
+   if optimizer: 
+       model.train()
+   else:
+       model.eval()
+
+   threshold = 0.5
+   total_loss = 0.0
+   metrics = None
+   
+   context_manager = torch.no_grad() if not optimizer else nullcontext()
+   
+   with context_manager:
+       for batch_idx, batch in enumerate(tqdm(loader)):
+           raw1, _ = batch
+           raw1 = raw1.to(device)
+
+           # Extract patches once
+           raw1_patches, patch_locations1 = extract_patches(raw1, patch_size, stride)
+           print(f"Raw1 patches shape: {raw1_patches.shape}")
+           
+           # Pre-compute flow input once per batch (computational optimization)
+           flow_inputs = None
+           if speckle_module is not None:
+               with torch.no_grad():
+                   flow_inputs = speckle_module(raw1)['flow_component']
+                   flow_inputs = normalize_image_torch(flow_inputs)
+                   flow_inputs = threshold_patches(flow_inputs, threshold=threshold)
+           
+           # Process patches
+           sub_batch_size = 32
+           batch_n2v_loss = 0.0
+           all_output_patches = []
+           final_outputs = None
+           final_mask = None
+           final_raw = None
+           
+           for i in range(0, len(raw1_patches), sub_batch_size):
+               raw1_sub_batch = raw1_patches[i:i+sub_batch_size]
+               
+               mask = torch.bernoulli(torch.full((raw1_sub_batch.size(0), 1, raw1_sub_batch.size(2), raw1_sub_batch.size(3)), 
+                                           mask_ratio, device=device))
+               
+               blind1 = create_blind_spot_input_with_realistic_noise(raw1_sub_batch, mask)
+               if optimizer:
+                   blind1 = blind1.requires_grad_(True)
+               
+               outputs1 = model(blind1)
+               
+               # Store for reconstruction
+               all_output_patches.append(outputs1.detach())
+               
+               # Keep final outputs for gradient computation if training
+               if optimizer:
+                   final_outputs = outputs1
+                   final_mask = mask
+                   final_raw = raw1_sub_batch
+               
+               # Accumulate N2V loss
+               n2v_loss = criterion(outputs1[mask > 0], raw1_sub_batch[mask > 0])
+               batch_n2v_loss += n2v_loss.item() * len(raw1_sub_batch)
+           
+           # Compute average N2V loss
+           avg_n2v_loss = batch_n2v_loss / len(raw1_patches)
+           
+           # Flow computation (only if speckle module exists)
+           flow_loss_value = 0.0
+           if speckle_module is not None:
+               # Reconstruct full image from patches
+               output_patches_cat = torch.cat(all_output_patches, dim=0)
+               reconstructed_outputs = reconstruct_from_patches(
+                   output_patches_cat, patch_locations1, raw1.shape, patch_size
+               )
+               
+               # Single flow computation on reconstructed image
+               with torch.no_grad():
+                   flow_outputs = speckle_module(reconstructed_outputs)['flow_component']
+                   flow_outputs = normalize_image_torch(flow_outputs)
+                   flow_outputs = threshold_patches(flow_outputs, threshold=threshold)
+                   
+                   flow_loss_value = torch.mean(torch.abs(flow_inputs - flow_outputs)).item()
+           
+           # Compute total loss
+           if adaptive_loss and speckle_module is not None:
+               alpha_adaptive = avg_n2v_loss / (flow_loss_value + 1e-8)
+               total_batch_loss = avg_n2v_loss + flow_loss_value * alpha_adaptive
+           else:
+               total_batch_loss = avg_n2v_loss + flow_loss_value * alpha
+           
+           # Gradient computation (only during training)
+           if optimizer and final_outputs is not None:
+               optimizer.zero_grad()
+               train_loss = criterion(final_outputs[final_mask > 0], final_raw[final_mask > 0])
+               train_loss.backward()
+               torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+               optimizer.step()
+           
+           total_loss += total_batch_loss
+           
+           # Visualization (only first batch)
+           if visualize and batch_idx == 0:
+               # Ensure reconstruction exists
+               if 'reconstructed_outputs' not in locals():
+                   output_patches_cat = torch.cat(all_output_patches, dim=0)
+                   reconstructed_outputs = reconstruct_from_patches(
+                       output_patches_cat, patch_locations1, raw1.shape, patch_size
+                   )
+               
+               sample_output = model(sample) if sample is not None else None
+               
+               if speckle_module is not None:
+                   titles = ['Input Image', 'Flow Input', 'Flow Output', 'Blind Spot Input', 'Output Image', 'Sample Input', 'Sample Output']
+                   images = [
+                       raw1[0][0].cpu().numpy(),
+                       flow_inputs[0][0].cpu().numpy(),
+                       flow_outputs[0][0].cpu().numpy(),
+                       blind1[0][0].cpu().numpy(),
+                       reconstructed_outputs[0][0].cpu().numpy(),
+                       sample.cpu().numpy()[0][0] if sample is not None else None,
+                       sample_output.cpu().numpy()[0][0] if sample_output is not None else None
+                   ]
+                   losses = {
+                       'Flow Loss': flow_loss_value,
+                       'Total Loss': total_batch_loss
+                   }
+               else:
+                   titles = ['Input Image', 'Blind Spot Input', 'Output Image', "Sample Input", "Sample Output"]
+                   images = [
+                       raw1[0][0].cpu().numpy(),
+                       blind1[0][0].cpu().numpy(),
+                       reconstructed_outputs[0][0].cpu().numpy(),
+                       sample.cpu().numpy()[0][0] if sample is not None else None,
+                       sample_output.cpu().numpy()[0][0] if sample_output is not None else None
+                   ]
+                   losses = {
+                       'Total Loss': total_batch_loss
+                   }
+               
+               plot_images(images, titles, losses)
+               
+               from fpss.utils import evaluate_oct_denoising
+               metrics = evaluate_oct_denoising(raw1[0][0].cpu().numpy(), reconstructed_outputs[0][0].cpu().numpy())
+
+   return total_loss / len(loader) if metrics is None else (total_loss / len(loader), metrics)

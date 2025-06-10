@@ -3,9 +3,22 @@ from fpss.losses.ssm_loss import custom_loss
 from fpss.utils.config import get_config
 import os
 import torch
+import torch.nn.functional as F
+
 def mse_loss(y_true, y_pred):
 
     return torch.mean((y_true - y_pred) ** 2)
+
+def dice_loss(y_true, y_pred, smooth=1e-6):
+    """Dice - Standard for medical segmentation"""
+    intersection = (y_true * y_pred).sum()
+    return 1 - (2. * intersection + smooth) / (y_true.sum() + y_pred.sum() + smooth)
+
+def dice_bce_loss(y_true, y_pred, dice_weight=0.5):
+    """Dice + BCE - Most common for OCT segmentation"""
+    dice = dice_loss(y_true, y_pred)
+    bce = F.binary_cross_entropy_with_logits(y_pred, y_true)
+    return dice_weight * dice + (1 - dice_weight) * bce
 
 def main():
     
@@ -17,7 +30,12 @@ def main():
 
     if loss_name == 'mse':
         loss_fn = mse_loss
+    elif loss_name == 'dice':
+        loss_fn = dice_loss
+    elif loss_name == 'dice_bce':
+        loss_fn = dice_bce_loss
     else:
+        print(f"Using custom loss function: {loss_name}")
         loss_fn = custom_loss
 
     print(config['training'])

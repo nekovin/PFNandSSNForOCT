@@ -48,6 +48,8 @@ def normalise_sample(raw_image, reference):
 
         return raw_image, reference
 
+from fpss.utils.seed import set_seed
+
 def main(method=None, soct=True):
 
     config_path = os.getenv("N2_CONFIG_PATH")
@@ -67,6 +69,7 @@ def main(method=None, soct=True):
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
+
     if soct:
 
         sdoct_path = r"C:\Datasets\OCTData\boe-13-12-6357-d001\Sparsity_SDOCT_DATASET_2012"
@@ -78,7 +81,6 @@ def main(method=None, soct=True):
         raw_image = dataset[sample]["raw"][0][0]
         reference = dataset[sample]["avg"][0][0]
         raw_image, reference = normalise_sample(raw_image, reference)
-    
     else:
         n_images_per_patient = config['training']['n_images_per_patient']
         batch_size = config['training']['batch_size']
@@ -124,16 +126,13 @@ def main(method=None, soct=True):
     config['training']['method'] = method
     
     verbose = config['training']['verbose']
+    
 
-    base_model, checkpoint = load_model(config, verbose, last=False, best=False)
-
-    config['speckle_module']['use'] = True
-    fpss_model, fpss_checkpoint = load_model(config, verbose, last=False, best=False)
-
-    speckle_module = FPSSAttention(input_channels=1, feature_dim=32).to(device)
+    speckle_module = FPSSAttention().to(device)
     try:
         print("Loading ssm model from checkpoint...")
-        ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\fpss\fpss_mse_best.pth"#config['ssm_checkpoint_path']
+        #ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\fpss\fpss_mse_best.pth"#config['ssm_checkpoint_path']
+        ssm_checkpoint_path = r"C:\Users\CL-11\OneDrive\Repos\OCTDenoisingFinal\checkpoints\fpss\fpss_SSMAttention_mse_best.pth"
         ssm_checkpoint = torch.load(ssm_checkpoint_path, map_location=device)
         speckle_module.load_state_dict(ssm_checkpoint['model_state_dict'])
         speckle_module.to(device)
@@ -155,7 +154,11 @@ def main(method=None, soct=True):
 
     # Best checkpoints
     try:
+        base_model, checkpoint = load_model(config, verbose, last=True, best=False)
         n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, method, base_model)
+        print(f"Raw - min: {raw_image.min():.4f}, max: {raw_image.max():.4f}, mean: {raw_image.mean():.4f}")
+        print(f"Denoised - min: {n2v_denoised.min():.4f}, max: {n2v_denoised.max():.4f}, mean: {n2v_denoised.mean():.4f}")
+
         metrics[f'{method}'] = n2v_metrics
         all_metrics[f'{method}'] = n2v_metrics
         print(f"Base: {checkpoint['epoch']}")
@@ -163,11 +166,17 @@ def main(method=None, soct=True):
     except Exception as e:
         print(f"Error evaluating n2v: {e}")
         n2v_metrics = None
-        n2v_denoised = None
+        #n2v_denoised = None
+        n2v_denoised = raw_image.cpu().numpy()[0][0]
 
+    
     try:
+        config['speckle_module']['use'] = True
+        fpss_model, fpss_checkpoint = load_model(config, verbose, last=True, best=False)
         
         n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, method, fpss_model)
+        print(f"Raw - min: {raw_image.min():.4f}, max: {raw_image.max():.4f}, mean: {raw_image.mean():.4f}")
+        print(f"Denoised - min: {n2v_ssm_denoised.min():.4f}, max: {n2v_ssm_denoised.max():.4f}, mean: {n2v_ssm_denoised.mean():.4f}")
         metrics[f'{method}_ssm'] = n2v_ssm_metrics
         all_metrics[f'{method}_ssm'] = n2v_ssm_metrics
         print(f"FPSS: {fpss_checkpoint['epoch']}")
@@ -185,15 +194,6 @@ def main(method=None, soct=True):
     #plt.savefig(f"../../results/{method}.png")\
     fig.savefig(f"../../results/{method}.png")
 
-    from fpss.utils import auto_select_roi_using_flow
-
-    masks = auto_select_roi_using_flow(raw_image[0][0].cpu().numpy(), device)
-    mask_fig, ax_mask = plt.subplots(1, 3, figsize=(15, 10))
-    ax_mask[0].imshow(raw_image[0][0].cpu().numpy(), cmap='gray')
-    ax_mask[1].imshow(masks[0], cmap='gray')
-    ax_mask[2].imshow(masks[1], cmap='gray')
-    plt.tight_layout()
-    plt.show()
 
     fig, ax = plt.subplots(1, 2, figsize=(15, 10))
     for a in ax:
@@ -262,7 +262,7 @@ def main(method=None, soct=True):
             # if metric not a number, skip
             
             metric_name = m[0]
-            if metric_name not in ['psnr', 'ssim', 'snr', 'cnr', 'enl', 'epi']:
+            if metric_name not in ['psnr', 'ssim', 'snr', 'snr_change', 'cnr', 'cnr_change', 'enl', 'enl_change', 'epi']:
                 continue
             metric1 = float(metrics1[metric_name])
             metric2 = float(metrics2[metric_name])

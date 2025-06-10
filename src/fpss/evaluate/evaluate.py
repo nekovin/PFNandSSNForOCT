@@ -14,6 +14,7 @@ def load_model(config, verbose=False, last=False, best=False):
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
     method = eval_config['method']
     model = eval_config['model']
+    print(base_checkpoint_path)
     if use_speckle:
         best_loss = config['speckle_module']['best']
         if best_loss:

@@ -447,10 +447,13 @@ def train_n2s(model, train_loader, val_loader, optimizer, criterion, starting_ep
     
     return model
 
+from contextlib import nullcontext
+from tqdm import tqdm
+
 def train_n2s_patch(model, train_loader, val_loader, optimizer, criterion, starting_epoch, epochs, batch_size, lr, 
           best_val_loss, checkpoint_path=None, device='cuda', visualise=False, 
           speckle_module=None, alpha=1, save=False, scheduler=None, sample=None, train_config=None, best_metrics_score=float('-inf'),
-          patch_size=64, stride=32, n_partitions=2):
+          patch_size=64, stride=32, n_partitions=2, adaptive_loss=False):
 
     last_checkpoint_path = checkpoint_path + f'_patched_last_checkpoint.pth'
     best_checkpoint_path = checkpoint_path + f'_patched_best_checkpoint.pth'
@@ -468,7 +471,7 @@ def train_n2s_patch(model, train_loader, val_loader, optimizer, criterion, start
         train_loss, _ = process_batch_n2s_patch(
             model, train_loader, criterion, optimizer, device=device,
             speckle_module=speckle_module, visualize=False, alpha=alpha, scheduler=None, sample=sample,
-            patch_size=patch_size, stride=stride, n_partitions=n_partitions
+            patch_size=patch_size, stride=stride, n_partitions=n_partitions, adaptive_loss=adaptive_loss
         )
         
         model.eval()
@@ -478,7 +481,7 @@ def train_n2s_patch(model, train_loader, val_loader, optimizer, criterion, start
             val_loss, val_metrics = process_batch_n2s_patch(
                 model, val_loader, criterion, optimizer=None, device=device,
                 speckle_module=speckle_module, visualize=visualise, alpha=alpha, scheduler=scheduler, sample=sample,
-                patch_size=patch_size, stride=stride, n_partitions=n_partitions
+                patch_size=patch_size, stride=stride, n_partitions=n_partitions, adaptive_loss=adaptive_loss
             )
 
             val_metrics_score = (
@@ -1351,3 +1354,190 @@ def process_batch_n2s_patch(
                 )
 
     return total_loss / len(loader), metrics
+
+def process_batch_n2s_patch(
+        model, loader, criterion, optimizer=None,
+        device='cuda', speckle_module=None, visualize=False,
+        alpha=1.0, scheduler=None, sample=None,
+        patch_size=64, stride=32, n_partitions=2, adaptive_loss=True
+        ):
+    
+    if optimizer: 
+        model.train()
+    else:
+        model.eval()
+    
+    total_loss = 0.0
+    metrics = None
+    
+    # Pre-compute checkerboard masks once
+    y_coords, x_coords = torch.meshgrid(
+        torch.arange(patch_size, device=device),
+        torch.arange(patch_size, device=device),
+        indexing='ij'
+    )
+    mask1 = ((y_coords + x_coords) % 2).float().unsqueeze(0).unsqueeze(0)
+    mask2 = 1 - mask1
+    
+    for batch_idx, batch in enumerate(tqdm(loader)):
+        raw1, _ = batch
+        raw1 = raw1.to(device)
+        
+        # Pre-compute flow input once per batch (computational optimization)
+        flow_inputs = None
+        if speckle_module is not None:
+            with torch.no_grad():
+                flow_inputs = speckle_module(raw1)['flow_component']
+                flow_inputs = normalize_image_torch(flow_inputs)
+        
+        # Extract patches
+        raw1_patches, patch_locations = extract_patches(raw1, patch_size, stride)
+        n_patches = raw1_patches.shape[0]
+        
+        # Process patches
+        sub_batch_size = 32
+        batch_n2s_loss = 0.0
+        all_output_patches = []
+        final_pred1 = None
+        final_pred2 = None
+        final_target1 = None
+        final_target2 = None
+        
+        if optimizer is not None:
+            optimizer.zero_grad()
+        
+        for i in range(0, n_patches, sub_batch_size):
+            current_batch_size = min(sub_batch_size, n_patches - i)
+            patch_sub_batch = raw1_patches[i:i+current_batch_size]
+            
+            # Get masks for current sub-batch
+            mask1_batch = mask1.expand(current_batch_size, -1, -1, -1)
+            mask2_batch = mask2.expand(current_batch_size, -1, -1, -1)
+            
+            # Process partitions
+            masked_input1 = patch_sub_batch * (1 - mask1_batch)
+            output1 = model(masked_input1)
+            pred1 = output1 * mask1_batch
+            
+            masked_input2 = patch_sub_batch * (1 - mask2_batch)
+            output2 = model(masked_input2)
+            pred2 = output2 * mask2_batch
+            
+            # Combine predictions
+            final_output = pred1 + pred2
+            all_output_patches.append(final_output.detach().clone())
+            
+            # Keep final outputs for gradient computation if training
+            if optimizer is not None:
+                final_pred1 = pred1
+                final_pred2 = pred2
+                final_target1 = patch_sub_batch * mask1_batch
+                final_target2 = patch_sub_batch * mask2_batch
+            
+            # Accumulate N2S loss (scalar computation for efficiency)
+            target1 = patch_sub_batch * mask1_batch
+            target2 = patch_sub_batch * mask2_batch
+            n2s_loss = criterion(pred1, target1) + criterion(pred2, target2)
+            batch_n2s_loss += n2s_loss.item() * current_batch_size
+        
+        # Compute average N2S loss
+        avg_n2s_loss = batch_n2s_loss / n_patches
+        
+        # Flow computation (only if speckle module exists)
+        flow_loss_value = 0.0
+        if speckle_module is not None:
+            # Reconstruct full image from patches
+            output_patches_cat = torch.cat(all_output_patches, dim=0)
+            reconstructed_outputs = reconstruct_from_patches(
+                output_patches_cat, patch_locations, raw1.shape, patch_size
+            )
+            
+            # Single flow computation on reconstructed image
+            with torch.no_grad():
+                flow_outputs = speckle_module(reconstructed_outputs)['flow_component']
+                flow_outputs = normalize_image_torch(flow_outputs)
+                flow_loss_value = torch.mean(torch.abs(flow_inputs - flow_outputs)).item()
+        
+        # Compute total loss
+        if adaptive_loss and speckle_module is not None:
+            #print("Using adaptive loss scaling")
+            alpha_adaptive = avg_n2s_loss / (flow_loss_value + 1e-8)
+            total_batch_loss = avg_n2s_loss + flow_loss_value * alpha_adaptive
+        else:
+            total_batch_loss = avg_n2s_loss + flow_loss_value * alpha
+
+        # Gradient computation (only during training)
+        if optimizer is not None and final_pred1 is not None:
+            # Compute loss with gradients for backprop on final sub-batch
+            if speckle_module is not None:
+                # Recompute flow loss with gradients for final batch
+                final_combined = final_pred1 + final_pred2
+                
+                with torch.no_grad():
+                    flow_inputs_patch = speckle_module(final_combined.detach())['flow_component']
+                    flow_inputs_patch = normalize_image_torch(flow_inputs_patch)
+                
+                flow_outputs_patch = speckle_module(final_combined)['flow_component']
+                flow_outputs_patch = normalize_image_torch(flow_outputs_patch)
+                flow_loss_grad = torch.mean(torch.abs(flow_outputs_patch - flow_inputs_patch))
+                
+                if adaptive_loss:
+                    #print("Using adaptive loss scaling")
+                    n2s_loss_grad = criterion(final_pred1, final_target1) + criterion(final_pred2, final_target2)
+                    alpha_adaptive = n2s_loss_grad.detach() / (flow_loss_grad.detach() + 1e-8)
+                    train_loss = n2s_loss_grad + flow_loss_grad * alpha_adaptive
+                else:
+                    train_loss = criterion(final_pred1, final_target1) + criterion(final_pred2, final_target2) + flow_loss_grad * alpha
+            else:
+                train_loss = criterion(final_pred1, final_target1) + criterion(final_pred2, final_target2)
+            
+            train_loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
+        
+        total_loss += total_batch_loss
+        
+        # Visualization (only first batch)
+        if visualize and batch_idx == 0:
+            # Ensure reconstruction exists
+            if 'reconstructed_outputs' not in locals():
+                output_patches_cat = torch.cat(all_output_patches, dim=0)
+                reconstructed_outputs = reconstruct_from_patches(
+                    output_patches_cat, patch_locations, raw1.shape, patch_size
+                )
+            
+            sample_output = model(sample) if sample is not None else None
+            
+            if speckle_module is not None:
+                titles = ['Input Image', 'Flow Input', 'Flow Output', 'N2S Output', 'Sample Input', 'Sample Output']
+                images = [
+                    raw1[0][0].cpu().numpy(),
+                    flow_inputs[0][0].cpu().numpy(),
+                    flow_outputs[0][0].cpu().numpy(),
+                    reconstructed_outputs[0][0].cpu().numpy(),
+                    sample.cpu().numpy()[0][0] if sample is not None else None,
+                    sample_output.cpu().numpy()[0][0] if sample_output is not None else None
+                ]
+                losses = {
+                    'Flow Loss': flow_loss_value,
+                    'Total Loss': total_batch_loss
+                }
+            else:
+                titles = ['Input Image', 'N2S Output', 'Sample Input', 'Sample Output']
+                images = [
+                    raw1[0][0].cpu().numpy(),
+                    reconstructed_outputs[0][0].cpu().numpy(),
+                    sample.cpu().numpy()[0][0] if sample is not None else None,
+                    sample_output.cpu().numpy()[0][0] if sample_output is not None else None
+                ]
+                losses = {
+                    'Total Loss': total_batch_loss
+                }
+            
+            plot_images(images, titles, losses)
+            
+            from fpss.utils import evaluate_oct_denoising
+            metrics = evaluate_oct_denoising(raw1[0][0].cpu().numpy(), reconstructed_outputs[0][0].cpu().numpy())
+
+    # Always return a tuple to match the unpacking expectation
+    return (total_loss / len(loader), metrics) if metrics is not None else (total_loss / len(loader), None)
