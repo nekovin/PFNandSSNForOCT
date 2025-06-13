@@ -7,6 +7,7 @@ from fpss.models.unet.large_unet_good import LargeUNet
 from fpss.models.unet.small_unet import SmallUNet
 from fpss.models.unet.small_unet_att import SmallUNetAtt
 from fpss.models.unet.blind_large_unet_attention import BlindLargeUNetAtt
+from fpss.models.unet.simple_unet import SimpleUNet
 
 def load_model(config, verbose=False, last=False, best=False):
     use_speckle = config['speckle_module']['use']
@@ -49,11 +50,20 @@ def load_model(config, verbose=False, last=False, best=False):
         model = LargeUNetAtt(in_channels=1, out_channels=1).to(device)
     elif model == "BlindLargeUNetAtt":
         model = BlindLargeUNetAtt(in_channels=1, out_channels=1).to(device)
+    elif model == "SimpleUNet":
+        
+        model = SimpleUNet(in_channels=1, out_channels=1).to(device)
+        print("Using SimpleUNet model")
+    elif model == "SimpleUNet2":
+        from fpss.models.unet.simple_unet2 import SimpleUNet2
+        model = SimpleUNet2(in_channels=1, out_channels=1).to(device)
     else:
         raise ValueError(f"Model {model} not supported")
 
     checkpoint = load_checkpoint(config, last)
     model.load_state_dict(checkpoint['model_state_dict'])
+    print(f"Model loaded from {checkpoint_path}")
+    print(checkpoint['model_state_dict'])
 
     if verbose:
         print(f"Loading {model} model...")
@@ -68,7 +78,7 @@ def load_model(config, verbose=False, last=False, best=False):
         print(f"Model loaded successfully")
     return model, checkpoint
 
-def load_checkpoint(config, last=False):
+def _load_checkpoint(config, last=False):
     eval_config = config['training']
     base_checkpoint_path = eval_config['baselines_checkpoint_path']
     ablation = eval_config['ablation'].format(n=config['training']['n_patients'], n_images=config['training']['n_images_per_patient'])

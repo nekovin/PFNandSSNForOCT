@@ -166,7 +166,6 @@ def main(method=None, soct=True):
     except Exception as e:
         print(f"Error evaluating n2v: {e}")
         n2v_metrics = None
-        #n2v_denoised = None
         n2v_denoised = raw_image.cpu().numpy()[0][0]
 
     
@@ -184,7 +183,7 @@ def main(method=None, soct=True):
     except Exception as e:
         print(f"Error evaluating n2v ssm: {e}")
         n2v_ssm_metrics = None
-        n2v_ssm_denoised = None
+        n2v_ssm_denoised = raw_image.cpu().numpy()[0][0]
 
     display_metrics(metrics)
 

@@ -8,6 +8,8 @@ from fpss.models.unet.large_unet_attention import LargeUNetAtt
 from fpss.models.fpss.fpss_attention import FPSSAttention
 from fpss.models.unet.small_unet import SmallUNet
 from fpss.models.unet.small_unet_att import SmallUNetAtt
+from fpss.models.unet.simple_unet import SimpleUNet
+from fpss.models.unet.simple_unet2 import SimpleUNet2
 
 from fpss.schemas.baselines.n2n import train_n2n
 from fpss.schemas.baselines.n2v import train_n2v
@@ -93,6 +95,10 @@ def train(config, method, ssm):
         model = SmallUNetAtt(in_channels=1, out_channels=1).to(device)
     elif train_config['model'] == 'LargeUNetAtt':
         model = LargeUNetAtt(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'SimpleUNet':
+        model = SimpleUNet(in_channels=1, out_channels=1).to(device)
+    elif train_config['model'] == 'SimpleUNet2':
+        model = SimpleUNet2(in_channels=1, out_channels=1).to(device)
     else:
         raise ValueError("Model not found")
 
