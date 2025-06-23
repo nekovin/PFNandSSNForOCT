@@ -1,7 +1,7 @@
 import os
-from ssm.trainers.n2_trainer import train_n2
-from ssm.utils.seed import set_seed
-from ssm.utils.config import get_config
+from fpss.trainers.n2_trainer import train_n2
+from fpss.utils.seed import set_seed
+from fpss.utils.config import get_config
 
 def main():
 

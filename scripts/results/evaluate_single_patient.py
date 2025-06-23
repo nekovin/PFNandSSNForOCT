@@ -7,11 +7,8 @@ import torch
 def main():
     
     override_config = {
-        "evaluation" : {
-            "ablation": "patient_count/3_patients",
-            "n_patients" : 3
-            }
-        }
+        "1" : ""
+    }
 
     all_metrics = {}
 
@@ -33,8 +30,8 @@ def main():
     plt.show()
 
     
-    n2n_metrics, n2n_denoised = evaluate_baseline(raw_image, reference, "n2n", override_config=override_config)
-    n2n_ssm_metrics, n2n_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2n", override_config=override_config)
+    n2n_metrics, n2n_denoised = evaluate_baseline(raw_image, reference, "n2n")
+    n2n_ssm_metrics, n2n_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2n")
     metrics = {}
     metrics['n2n'] = n2n_metrics
     metrics['n2n_ssm'] = n2n_ssm_metrics
@@ -48,8 +45,8 @@ def main():
     ax[1].set_title("N2N SSM Denoised")
     plt.show()
 
-    n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, "n2v", override_config=override_config)
-    n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2v", override_config=override_config)
+    n2v_metrics, n2v_denoised = evaluate_baseline(raw_image, reference, "n2v")
+    n2v_ssm_metrics, n2v_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2v")
     metrics = {}
     metrics['n2v'] = n2v_metrics
     metrics['n2v_ssm'] = n2v_ssm_metrics
@@ -63,8 +60,10 @@ def main():
     ax[1].set_title("N2V SSM Denoised")
     plt.show()
 
-    n2s_metrics, n2s_denoised = evaluate_baseline(raw_image, reference, "n2s", override_config=override_config)
-    n2s_ssm_metrics, n2s_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2s", override_config=override_config)
+    last = False
+    n2s_metrics, n2s_denoised = evaluate_baseline(raw_image, reference, "n2s", last=last)
+    last = True
+    n2s_ssm_metrics, n2s_ssm_denoised = evaluate_ssm_constraint(raw_image, reference, "n2s", last=last)
     metrics = {}
     metrics['n2s'] = n2s_metrics
     metrics['n2s_ssm'] = n2s_ssm_metrics
